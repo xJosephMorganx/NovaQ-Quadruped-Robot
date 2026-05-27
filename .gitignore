@@ -1,0 +1,6 @@
+~$*
+*.tmp
+*.bak
+__pycache__/
+.analysis_pkgs/
+analysis_frames/

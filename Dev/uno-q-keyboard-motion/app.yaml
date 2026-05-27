@@ -1,0 +1,11 @@
+name: uno-q-keyboard-motion
+description: Keyboard-controlled quadruped motion app for Arduino UNO Q and PCA9685.
+version: 0.1.0
+
+bricks:
+  - arduino:web_ui
+
+# WebUI serves the main app on port 7000. The optional MJPEG camera stream uses
+# port 7001 when App Lab exposes custom ports in the current environment.
+ports:
+  - 7001

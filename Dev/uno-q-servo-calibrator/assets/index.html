@@ -1,0 +1,109 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>UNO Q Servo Calibrator</title>
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <main class="app-shell">
+      <header class="top-bar">
+        <div>
+          <h1>UNO Q Servo Calibrator</h1>
+          <p>PCA9685 channel calibration for the quadruped robot.</p>
+        </div>
+        <div class="status-group" aria-live="polite">
+          <span id="connectionStatus" class="status-pill status-warning">Connecting</span>
+          <button id="saveButton" class="button primary-button" type="button">Save</button>
+          <button id="exportButton" class="button secondary-button" type="button">Export JSON</button>
+        </div>
+      </header>
+
+      <section class="workspace" aria-label="Servo calibration workspace">
+        <section class="control-panel" aria-label="Calibration controls">
+          <div class="panel-header">
+            <div>
+              <h2>Active Servo</h2>
+              <p id="servoName">Channel 0</p>
+            </div>
+            <span id="rangeBadge" class="range-badge">70-495</span>
+          </div>
+
+          <label class="field-label" for="channelSelect">PCA9685 Channel</label>
+          <select id="channelSelect" class="field-control"></select>
+
+          <label class="field-label" for="pulseInput">Pulse Value</label>
+          <div class="pulse-row">
+            <input id="pulseInput" class="field-control pulse-input" type="number" min="50" max="600" step="1" />
+            <button id="sendButton" class="button primary-button" type="button">Send</button>
+          </div>
+
+          <div class="step-grid" aria-label="Pulse step controls">
+            <button class="step-button" type="button" data-step="-5">-5</button>
+            <button class="step-button" type="button" data-step="-1">-1</button>
+            <button class="step-button" type="button" data-step="1">+1</button>
+            <button class="step-button" type="button" data-step="5">+5</button>
+          </div>
+
+          <div class="readout-grid">
+            <div>
+              <span class="readout-label">Current</span>
+              <strong id="currentPulse">300</strong>
+            </div>
+            <div>
+              <span class="readout-label">Reference Min</span>
+              <strong id="referenceMin">70</strong>
+            </div>
+            <div>
+              <span class="readout-label">Reference Max</span>
+              <strong id="referenceMax">495</strong>
+            </div>
+          </div>
+
+          <p id="lastResult" class="result-line">Ready</p>
+        </section>
+
+        <section class="camera-panel" aria-label="Camera live feed">
+          <div class="panel-header">
+            <div>
+              <h2>Camera Feed</h2>
+              <p id="cameraStatus">Starting camera</p>
+            </div>
+            <button id="toggleStreamButton" class="button secondary-button" type="button">MJPEG</button>
+          </div>
+
+          <div class="camera-frame">
+            <img id="cameraImage" alt="Live camera feed from the UNO Q" />
+            <div id="cameraFallback" class="camera-fallback">Camera unavailable</div>
+          </div>
+        </section>
+      </section>
+
+      <section class="table-panel" aria-label="Calibration table">
+        <div class="panel-header">
+          <div>
+            <h2>Saved Working Values</h2>
+            <p>Values update locally after each successful servo command.</p>
+          </div>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Articulation</th>
+                <th>Channel</th>
+                <th>Pulse Min 0 deg</th>
+                <th>Pulse Max 180 deg</th>
+                <th>Current Pulse</th>
+              </tr>
+            </thead>
+            <tbody id="calibrationRows"></tbody>
+          </table>
+        </div>
+      </section>
+    </main>
+
+    <script src="/app.js"></script>
+  </body>
+</html>

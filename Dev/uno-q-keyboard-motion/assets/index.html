@@ -1,0 +1,119 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>UNO Q Keyboard Motion</title>
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <main class="app-shell">
+      <header class="top-bar">
+        <div>
+          <h1>UNO Q Keyboard Motion</h1>
+          <p>Live camera feed and keyboard-triggered robot poses.</p>
+        </div>
+        <div class="status-group" aria-live="polite">
+          <span id="connectionStatus" class="status-pill status-warning">Connecting</span>
+          <span id="lastMotion" class="status-pill">Motion: none</span>
+          <button id="focusModeButton" class="button secondary-button" type="button">Focus View</button>
+        </div>
+      </header>
+
+      <section class="workspace" aria-label="Robot motion workspace">
+        <section class="control-panel" aria-label="Motion controls">
+          <div class="panel-header">
+            <div>
+              <h2>Motion Controls</h2>
+              <p id="motionHint">Use Arrow Up for Stand or Arrow Down for Initial.</p>
+            </div>
+          </div>
+
+          <div class="motion-grid">
+            <button id="initialButton" class="motion-button" type="button" data-motion="initial">
+              <span class="keycap">DOWN</span>
+              <span>
+                <strong>Initial</strong>
+                <small>Arrow Down: arms vertical up, then shoulders 90</small>
+              </span>
+            </button>
+
+            <button id="standButton" class="motion-button" type="button" data-motion="stand">
+              <span class="keycap">UP</span>
+              <span>
+              <strong>Stand</strong>
+              <small>Arrow Up: shoulders midpoint, then arms vertical down</small>
+            </span>
+          </button>
+
+            <button id="greetingButton" class="motion-button" type="button" data-motion="greeting">
+              <span class="keycap">RIGHT</span>
+              <span>
+                <strong>Hi</strong>
+                <small>Arrow Right: short FL wave, then back to stand</small>
+              </span>
+            </button>
+          </div>
+
+          <div class="readout-grid">
+            <div>
+              <span class="readout-label">Initial</span>
+              <strong>slower arms</strong>
+            </div>
+            <div>
+              <span class="readout-label">Stand Delay</span>
+              <strong>500 ms</strong>
+            </div>
+          </div>
+
+          <p id="lastResult" class="result-line">Ready</p>
+        </section>
+
+        <section class="camera-panel" aria-label="Camera live feed">
+          <div class="panel-header">
+            <div>
+              <h2>Camera Feed</h2>
+              <p id="cameraStatus">Starting camera</p>
+            </div>
+            <button id="toggleStreamButton" class="button secondary-button" type="button">MJPEG</button>
+          </div>
+
+          <div class="camera-frame">
+            <div class="video-hud" aria-live="polite">
+              <span id="hudConnection">Connecting</span>
+              <span id="hudMotion">Motion: none</span>
+              <span id="hudResult">Ready</span>
+            </div>
+            <img id="cameraImage" alt="Live camera feed from the UNO Q" />
+            <div id="cameraFallback" class="camera-fallback">Camera unavailable</div>
+          </div>
+        </section>
+      </section>
+
+      <section class="table-panel" aria-label="Motion pulse table">
+        <div class="panel-header">
+          <div>
+            <h2>Pose Pulses</h2>
+            <p>Calibrated pulse targets used by the Arduino motion functions.</p>
+          </div>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Articulation</th>
+                <th>Channel</th>
+                <th>Initial</th>
+                <th>Stand</th>
+                <th>Greeting</th>
+              </tr>
+            </thead>
+            <tbody id="poseRows"></tbody>
+          </table>
+        </div>
+      </section>
+    </main>
+
+    <script src="/app.js"></script>
+  </body>
+</html>
