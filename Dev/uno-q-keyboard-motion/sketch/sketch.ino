@@ -32,10 +32,10 @@ struct ServoTarget {
 };
 
 const ServoTarget InitialShoulders[] = {
-  {ChannelShoulderFL, 165},
-  {ChannelShoulderFR, 390},
-  {ChannelShoulderBL, 415},
-  {ChannelShoulderBR, 170},
+  {ChannelShoulderFL, 170},
+  {ChannelShoulderFR, 410},
+  {ChannelShoulderBL, 410},
+  {ChannelShoulderBR, 175},
 };
 
 const ServoTarget InitialLegs[] = {
@@ -48,7 +48,7 @@ const ServoTarget InitialLegs[] = {
 const ServoTarget StandShoulders[] = {
   {ChannelShoulderFL, 280},
   {ChannelShoulderFR, 265},
-  {ChannelShoulderBL, 285},
+  {ChannelShoulderBL, 295},
   {ChannelShoulderBR, 280},
 };
 
@@ -120,7 +120,7 @@ const ServoTarget ForwardLiftB[] = {
 
 const ServoTarget ForwardPlaceB[] = {
   {ChannelShoulderFR, 335},
-  {ChannelShoulderBL, 225},
+  {ChannelShoulderBL, 235},
 };
 
 const ServoTarget ForwardPlantB[] = {
@@ -130,7 +130,7 @@ const ServoTarget ForwardPlantB[] = {
 
 const ServoTarget ForwardPushB[] = {
   {ChannelShoulderFR, 225},
-  {ChannelShoulderBL, 335},
+  {ChannelShoulderBL, 345},
 };
 
 const ServoTarget BackwardPlaceA[] = {
@@ -145,12 +145,12 @@ const ServoTarget BackwardPushA[] = {
 
 const ServoTarget BackwardPlaceB[] = {
   {ChannelShoulderFR, 225},
-  {ChannelShoulderBL, 335},
+  {ChannelShoulderBL, 345},
 };
 
 const ServoTarget BackwardPushB[] = {
   {ChannelShoulderFR, 335},
-  {ChannelShoulderBL, 225},
+  {ChannelShoulderBL, 235},
 };
 
 Adafruit_PWMServoDriver pwm = Adafruit_PWMServoDriver(Pca9685Address);
