@@ -33,7 +33,7 @@ struct ServoTarget {
 
 const ServoTarget InitialShoulders[] = {
   {ChannelShoulderFL, 170},
-  {ChannelShoulderFR, 410},
+  {ChannelShoulderFR, 376},
   {ChannelShoulderBL, 412},
   {ChannelShoulderBR, 175},
 };

@@ -77,7 +77,7 @@ keyboard.
 | --- | ---: | ---: | ---: | --- |
 | Shoulder_FL | 0 | 170 | 280 | waves between `235-300` |
 | Leg_FL | 1 | 513 | 110 | lifts to `430` |
-| Shoulder_FR | 2 | 410 | 265 | support to `295` |
+| Shoulder_FR | 2 | 376 | 265 | support to `295` |
 | Leg_FR | 3 | 90 | 500 |  |
 | Shoulder_BL | 4 | 412 | 295 |  |
 | Leg_BL | 5 | 75 | 495 |  |
