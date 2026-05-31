@@ -25,10 +25,10 @@ TRANSIENT_MOTIONS = {"backward_step", "forward_step", "greeting"}
 
 POSE_TABLE = [
     {"name": "Shoulder_FL", "channel": 0, "initial": 170, "stand": 280, "greeting": "235-300"},
-    {"name": "Leg_FL", "channel": 1, "initial": 505, "stand": 110, "greeting": 430},
+    {"name": "Leg_FL", "channel": 1, "initial": 513, "stand": 110, "greeting": 430},
     {"name": "Shoulder_FR", "channel": 2, "initial": 410, "stand": 265, "greeting": 295},
     {"name": "Leg_FR", "channel": 3, "initial": 90, "stand": 500},
-    {"name": "Shoulder_BL", "channel": 4, "initial": 410, "stand": 295},
+    {"name": "Shoulder_BL", "channel": 4, "initial": 412, "stand": 295},
     {"name": "Leg_BL", "channel": 5, "initial": 75, "stand": 495},
     {"name": "Shoulder_BR", "channel": 6, "initial": 175, "stand": 280},
     {"name": "Leg_BR", "channel": 7, "initial": 525, "stand": 110, "greeting": 180},

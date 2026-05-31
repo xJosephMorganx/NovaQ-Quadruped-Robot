@@ -34,12 +34,12 @@ struct ServoTarget {
 const ServoTarget InitialShoulders[] = {
   {ChannelShoulderFL, 170},
   {ChannelShoulderFR, 410},
-  {ChannelShoulderBL, 410},
+  {ChannelShoulderBL, 412},
   {ChannelShoulderBR, 175},
 };
 
 const ServoTarget InitialLegs[] = {
-  {ChannelLegFL, 505},
+  {ChannelLegFL, 513},
   {ChannelLegFR, 90},
   {ChannelLegBL, 75},
   {ChannelLegBR, 525},

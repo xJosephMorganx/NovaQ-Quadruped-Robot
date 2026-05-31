@@ -76,10 +76,10 @@ keyboard.
 | Articulation | Channel | Initial | Stand | Greeting |
 | --- | ---: | ---: | ---: | --- |
 | Shoulder_FL | 0 | 170 | 280 | waves between `235-300` |
-| Leg_FL | 1 | 505 | 110 | lifts to `430` |
+| Leg_FL | 1 | 513 | 110 | lifts to `430` |
 | Shoulder_FR | 2 | 410 | 265 | support to `295` |
 | Leg_FR | 3 | 90 | 500 |  |
-| Shoulder_BL | 4 | 410 | 295 |  |
+| Shoulder_BL | 4 | 412 | 295 |  |
 | Leg_BL | 5 | 75 | 495 |  |
 | Shoulder_BR | 6 | 175 | 280 |  |
 | Leg_BR | 7 | 525 | 110 | support lift to `180` |
