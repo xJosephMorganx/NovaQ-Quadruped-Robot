@@ -21,10 +21,11 @@ Nueva app independiente para controlar el robot cuadrúpedo UNO Q sin reemplazar
   - F4: `mediapipe`
 - Modo OpenCV con tracking básico de pelota azul:
   - Máscara HSV azul.
-  - Detector de círculo con HoughCircles y fallback por contorno.
+  - Detector estricto por contorno circular: radio máximo, circularidad y densidad de relleno.
   - Si no detecta pelota: búsqueda girando a la derecha.
   - Si detecta pelota fuera del centro: corrige con giro izquierdo/derecho.
   - Si detecta pelota centrada: avanza hacia adelante.
+  - Entre movimientos vuelve a `stand` y espera para estabilizar la imagen.
   - El feed muestra una vista anotada mientras OpenCV está activo.
 - Modo MediaPipe reservado para control por mano.
 - Sketch con PCA9685 en `0x40`, canales `0-7`, `50 Hz`, reutilizando pulsos, poses y gait del prototipo.

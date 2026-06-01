@@ -160,10 +160,13 @@ function formatBlueBallStatus(blueBall) {
     return "Idle";
   }
   if (!blueBall.detected) {
-    return `${blueBall.action || "search"} -> ${blueBall.motion || "turn_right"}`;
+    const reason = blueBall.rejectReason ? ` (${blueBall.rejectReason})` : "";
+    return `${blueBall.action || "search"} -> ${blueBall.motion || "turn_right"}${reason}`;
   }
   const offset = Number(blueBall.offset || 0).toFixed(2);
-  return `x ${blueBall.x}, r ${blueBall.radius}, off ${offset} -> ${blueBall.motion}`;
+  const circularity = Number(blueBall.circularity || 0).toFixed(2);
+  const fill = Number(blueBall.fillRatio || 0).toFixed(2);
+  return `x ${blueBall.x}, r ${blueBall.radius}, off ${offset}, c ${circularity}, f ${fill} -> ${blueBall.motion}`;
 }
 
 async function setMode(mode, source = "ui") {

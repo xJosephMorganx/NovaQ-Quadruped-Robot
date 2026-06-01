@@ -35,6 +35,7 @@ BLUE_MIN_CIRCULARITY = 0.72
 BLUE_MIN_FILL_RATIO = 0.50
 BLUE_MAX_FILL_RATIO = 1.18
 BLUE_CENTER_DEADZONE_RATIO = 0.14
+BLUE_STABLE_DETECTIONS_REQUIRED = 2
 
 CONTROL_MODES = {"manual", "opencv", "mediapipe"}
 MOTION_MODES = {"initial", "stand", "greeting", "forward", "backward", "turn_left", "turn_right"}
@@ -229,10 +230,6 @@ class MotionController:
             snapshot = self.snapshot()
 
             if snapshot.app_mode != "manual":
-                if snapshot.desired_motion in CONTINUOUS_MOTION_MODES:
-                    self._execute_step(snapshot.desired_motion, snapshot.generation)
-                    continue
-
                 if snapshot.current_motion != snapshot.desired_motion:
                     self._execute_step(snapshot.desired_motion, snapshot.generation)
                     continue
@@ -312,6 +309,12 @@ vision_status = {
     },
 }
 vision_lock = threading.Lock()
+opencv_state = {
+    "last_motion_at": 0.0,
+    "last_detection_key": None,
+    "stable_detection_count": 0,
+}
+opencv_lock = threading.Lock()
 
 
 def state_response() -> dict[str, Any]:
@@ -441,42 +444,70 @@ def detect_blue_ball(frame: Any) -> dict[str, Any]:
         "radius": None,
         "offset": None,
         "maskArea": mask_area,
+        "circleArea": 0,
+        "circularity": 0,
+        "fillRatio": 0,
+        "rejectReason": "no_blue_mask",
         "frameWidth": width,
         "frameHeight": height,
         "mask": mask,
     }
     if mask_area < BLUE_MIN_MASK_AREA:
+        detection["rejectReason"] = "mask_too_small"
         return detection
 
-    blurred = cv2.GaussianBlur(mask, (9, 9), 2)
-    circles = cv2.HoughCircles(
-        blurred,
-        cv2.HOUGH_GRADIENT,
-        dp=1.2,
-        minDist=40,
-        param1=80,
-        param2=14,
-        minRadius=BLUE_MIN_RADIUS,
-        maxRadius=0,
-    )
+    contours, _hierarchy = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+    candidates = []
+    max_radius = int(min(width, height) * BLUE_MAX_RADIUS_RATIO)
 
-    if circles is not None:
-        circle = max(circles[0], key=lambda candidate: candidate[2])
-        x, y, radius = int(round(circle[0])), int(round(circle[1])), int(round(circle[2]))
-    else:
-        contours, _hierarchy = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-        if not contours:
-            return detection
-        contour = max(contours, key=cv2.contourArea)
+    for contour in contours:
         contour_area = cv2.contourArea(contour)
         if contour_area < BLUE_MIN_MASK_AREA:
-            return detection
-        (x_float, y_float), radius_float = cv2.minEnclosingCircle(contour)
-        x, y, radius = int(round(x_float)), int(round(y_float)), int(round(radius_float))
+            continue
 
-    if radius < BLUE_MIN_RADIUS:
+        perimeter = cv2.arcLength(contour, True)
+        if perimeter <= 0:
+            continue
+
+        (x_float, y_float), radius_float = cv2.minEnclosingCircle(contour)
+        radius = int(round(radius_float))
+        if radius < BLUE_MIN_RADIUS:
+            continue
+        if radius > max_radius:
+            continue
+
+        circle_area = math.pi * radius_float * radius_float
+        if circle_area <= 0:
+            continue
+
+        circularity = (4 * math.pi * contour_area) / (perimeter * perimeter)
+        fill_ratio = contour_area / circle_area
+        if circularity < BLUE_MIN_CIRCULARITY:
+            continue
+        if fill_ratio < BLUE_MIN_FILL_RATIO or fill_ratio > BLUE_MAX_FILL_RATIO:
+            continue
+
+        x, y = int(round(x_float)), int(round(y_float))
+        candidates.append(
+            {
+                "x": x,
+                "y": y,
+                "radius": radius,
+                "contourArea": int(contour_area),
+                "circleArea": int(circle_area),
+                "circularity": round(circularity, 3),
+                "fillRatio": round(fill_ratio, 3),
+            }
+        )
+
+    if not candidates:
+        detection["rejectReason"] = "no_circular_candidate"
         return detection
 
+    candidate = max(candidates, key=lambda item: item["contourArea"])
+    x = candidate["x"]
+    y = candidate["y"]
+    radius = candidate["radius"]
     offset = (x - (width / 2)) / (width / 2)
     detection.update(
         {
@@ -485,6 +516,10 @@ def detect_blue_ball(frame: Any) -> dict[str, Any]:
             "y": y,
             "radius": radius,
             "offset": round(offset, 3),
+            "circleArea": candidate["circleArea"],
+            "circularity": candidate["circularity"],
+            "fillRatio": candidate["fillRatio"],
+            "rejectReason": None,
         }
     )
     return detection
@@ -500,6 +535,50 @@ def choose_blue_ball_motion(detection: dict[str, Any]) -> tuple[str, str]:
     if offset > BLUE_CENTER_DEADZONE_RATIO:
         return "correct_right", "turn_right"
     return "centered_advance", "forward"
+
+
+def build_detection_key(detection: dict[str, Any], action: str) -> str:
+    if not detection["detected"]:
+        return "missing"
+    x_bucket = int(int(detection["x"]) / 32)
+    y_bucket = int(int(detection["y"]) / 32)
+    radius_bucket = int(int(detection["radius"]) / 12)
+    return f"{action}:{x_bucket}:{y_bucket}:{radius_bucket}"
+
+
+def is_detection_stable(detection: dict[str, Any], action: str) -> bool:
+    if not detection["detected"]:
+        with opencv_lock:
+            opencv_state["last_detection_key"] = None
+            opencv_state["stable_detection_count"] = 0
+        return False
+
+    detection_key = build_detection_key(detection, action)
+    with opencv_lock:
+        if opencv_state["last_detection_key"] == detection_key:
+            opencv_state["stable_detection_count"] += 1
+        else:
+            opencv_state["last_detection_key"] = detection_key
+            opencv_state["stable_detection_count"] = 1
+        return opencv_state["stable_detection_count"] >= BLUE_STABLE_DETECTIONS_REQUIRED
+
+
+def maybe_issue_opencv_motion(action: str, motion: str, detection: dict[str, Any]) -> tuple[str, str]:
+    now = time.monotonic()
+    with opencv_lock:
+        elapsed = now - float(opencv_state["last_motion_at"])
+        if elapsed < OPENCV_STEP_COOLDOWN_SECONDS:
+            motion_controller.set_autonomous_motion("opencv", "stand", "OpenCV settling image after movement")
+            return "settling", "stand"
+
+    if detection["detected"] and not is_detection_stable(detection, action):
+        motion_controller.set_autonomous_motion("opencv", "stand", "OpenCV confirming stable ball detection")
+        return "confirming", "stand"
+
+    motion_controller.set_autonomous_motion("opencv", motion, f"OpenCV blue ball {action}: {motion}")
+    with opencv_lock:
+        opencv_state["last_motion_at"] = now
+    return action, motion
 
 
 def encode_vision_frame(frame: Any, detection: dict[str, Any], action: str, motion: str) -> bytes | None:
@@ -566,8 +645,8 @@ def vision_worker_loop() -> None:
 
         if snapshot.app_mode == "opencv":
             detection = detect_blue_ball(frame)
-            action, motion = choose_blue_ball_motion(detection)
-            motion_controller.set_autonomous_motion("opencv", motion, f"OpenCV blue ball {action}: {motion}")
+            planned_action, planned_motion = choose_blue_ball_motion(detection)
+            action, motion = maybe_issue_opencv_motion(planned_action, planned_motion, detection)
             encoded_frame = encode_vision_frame(frame, detection, action, motion)
             if encoded_frame is not None:
                 with camera_lock:
@@ -588,6 +667,9 @@ def vision_worker_loop() -> None:
                     "radius": detection["radius"],
                     "offset": detection["offset"],
                     "maskArea": detection["maskArea"],
+                    "circularity": detection["circularity"],
+                    "fillRatio": detection["fillRatio"],
+                    "rejectReason": detection["rejectReason"],
                 }
 
         if snapshot.app_mode == "mediapipe":
