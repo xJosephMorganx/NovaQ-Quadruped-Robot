@@ -41,7 +41,7 @@ VISION_FRAME_INTERVAL_SECONDS = 0.06
 OPENCV_STEP_COOLDOWN_SECONDS = 3.0
 OPENCV_SEARCH_BURST_STEPS = 3
 ENABLE_GESTURE_BRICK = os.environ.get("UNO_Q_ENABLE_GESTURE_BRICK", "1").strip().lower() not in {"0", "false", "no"}
-HAND_ACTION_COOLDOWN_SECONDS = 1.0
+HAND_ACTION_COOLDOWN_SECONDS = 2.5
 HAND_STABLE_GESTURES_REQUIRED = 3
 BLUE_HSV_LOWER = (98, 105, 55)
 BLUE_HSV_UPPER = (135, 255, 255)
@@ -78,11 +78,14 @@ LEGACY_MOTION_TO_MODE = {legacy: mode for mode, legacy in MODE_TO_LEGACY_MOTION.
 GESTURE_LABEL_TO_MOTION = {
     "open_palm": "stand",
     "open_hand": "stand",
+    "open": "stand",
     "palm": "stand",
     "five": "stand",
     "stop": "stand",
     "stand": "stand",
     "fist": "initial",
+    "neutral_fist": "initial",
+    "neutral": "initial",
     "closed_fist": "initial",
     "closed_hand": "initial",
     "initial": "initial",
@@ -93,10 +96,15 @@ GESTURE_LABEL_TO_MOTION = {
     "up": "forward",
     "forward": "forward",
     "thumbs_up": "forward",
+    "thumbsup": "forward",
+    "thumb_up": "forward",
+    "good": "forward",
     "two": "backward",
     "two_fingers": "backward",
     "peace": "backward",
     "v_sign": "backward",
+    "v": "backward",
+    "v_sign_peace": "backward",
     "down": "backward",
     "backward": "backward",
     "left": "turn_left",
@@ -461,6 +469,8 @@ opencv_lock = threading.Lock()
 hand_state = {
     "last_gesture": None,
     "stable_gesture_count": 0,
+    "last_issued_gesture": None,
+    "last_detection_at": 0.0,
     "last_motion_at": 0.0,
 }
 hand_lock = threading.Lock()
@@ -846,11 +856,15 @@ def maybe_issue_gesture_brick_motion(gesture: dict[str, Any]) -> tuple[str, str]
     now = time.monotonic()
     with hand_lock:
         elapsed = now - float(hand_state["last_motion_at"])
+        same_as_last_issued = hand_state["last_issued_gesture"] == label
+        if same_as_last_issued:
+            return "already_seen", "hold"
         if elapsed < HAND_ACTION_COOLDOWN_SECONDS:
             return "cooldown", "hold"
         hand_state["last_motion_at"] = now
+        hand_state["last_issued_gesture"] = label
 
-    motion_controller.set_autonomous_motion(HAND_GESTURE_MODE, motion, f"Gesture brick {label}: {motion}", force=True)
+    motion_controller.set_autonomous_motion(HAND_GESTURE_MODE, motion, f"Gesture brick {label}: {motion}")
     return label, motion
 
 
@@ -875,6 +889,12 @@ def on_gesture_detections(detections: dict[str, Any], frame: bytes | None = None
                 "motion": "hold",
                 "confidence": 0,
             }
+
+        with hand_lock:
+            hand_state["last_gesture"] = None
+            hand_state["stable_gesture_count"] = 0
+            hand_state["last_issued_gesture"] = None
+            hand_state["last_detection_at"] = 0.0
         return
 
     snapshot = motion_controller.snapshot()
@@ -885,6 +905,9 @@ def on_gesture_detections(detections: dict[str, Any], frame: bytes | None = None
         motion = "hold"
     else:
         action, motion = maybe_issue_gesture_brick_motion(best_detection)
+
+    with hand_lock:
+        hand_state["last_detection_at"] = time.monotonic()
 
     with vision_lock:
         vision_status["handGesture"] = f"Gesture brick {action}: {motion}"
@@ -915,7 +938,7 @@ def setup_gesture_detector() -> Any:
 
     try:
         camera = DirectOpenCVCamera(device=CAMERA_DEVICE, resolution=(640, 480), fps=10)
-        detector = VideoObjectDetection(camera=camera, confidence=0.45, debounce_sec=0.25, camera_preview=True)
+        detector = VideoObjectDetection(camera=camera, confidence=0.60, debounce_sec=0.60, camera_preview=True)
         detector.on_detect_all(on_gesture_detections)
         with vision_lock:
             vision_status["handGesture"] = "Gesture brick ready: waiting for hand"
@@ -941,6 +964,14 @@ def vision_worker_loop() -> None:
             continue
 
         if snapshot.app_mode == HAND_GESTURE_MODE:
+            with hand_lock:
+                last_detection_at = float(hand_state["last_detection_at"])
+                if last_detection_at and time.monotonic() - last_detection_at > 2.0:
+                    hand_state["last_gesture"] = None
+                    hand_state["stable_gesture_count"] = 0
+                    hand_state["last_issued_gesture"] = None
+                    hand_state["last_detection_at"] = 0.0
+
             with vision_lock:
                 if ENABLE_GESTURE_BRICK:
                     if vision_status["handGesture"].startswith("Idle"):

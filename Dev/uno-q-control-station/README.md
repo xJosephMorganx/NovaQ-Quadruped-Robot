@@ -30,7 +30,8 @@ Nueva app independiente para controlar el robot cuadrúpedo UNO Q sin reemplazar
 - Modo Hand Gesture usando solo el brick `arduino:video_object_detection`:
   - Usa un modelo Edge Impulse en `/home/arduino/.arduino-bricks/ei-models/hand_gesture.eim`.
   - El brick detecta gestos de mano desnuda y entrega etiqueta, confianza y bounding box.
-  - La app mapea etiquetas comunes (`open_palm`, `fist`, `one`, `two`, `left`, `right`, `wave`) a movimientos del robot.
+  - La app mapea etiquetas comunes (`open_palm`, `fist`, `good`, `thumbs_up`, `peace`, `left`, `right`, `wave`) a movimientos del robot.
+  - El mismo gesto se dispara una vez, con cooldown de 2.5 segundos, para evitar que un reconocimiento sostenido bloquee el control.
   - Si no detecta mano o la etiqueta no esta mapeada: no manda movimiento.
   - La camara del brick usa `/dev/video0` directo y alimenta tambien el feed de la UI.
   - OpenCV queda reservado solo para el modo de pelota azul.
