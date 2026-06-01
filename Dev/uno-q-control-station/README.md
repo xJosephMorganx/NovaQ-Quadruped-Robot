@@ -19,7 +19,13 @@ Nueva app independiente para controlar el robot cuadrúpedo UNO Q sin reemplazar
   - Space: `manual`
   - PageDown: `opencv`
   - F4: `mediapipe`
-- Modo OpenCV reservado para detección de pelota azul.
+- Modo OpenCV con tracking básico de pelota azul:
+  - Máscara HSV azul.
+  - Detector de círculo con HoughCircles y fallback por contorno.
+  - Si no detecta pelota: búsqueda girando a la derecha.
+  - Si detecta pelota fuera del centro: corrige con giro izquierdo/derecho.
+  - Si detecta pelota centrada: avanza hacia adelante.
+  - El feed muestra una vista anotada mientras OpenCV está activo.
 - Modo MediaPipe reservado para control por mano.
 - Sketch con PCA9685 en `0x40`, canales `0-7`, `50 Hz`, reutilizando pulsos, poses y gait del prototipo.
 
@@ -37,6 +43,8 @@ La UI ya no encola un request por cada step mientras una tecla está presionada.
 - `POST /api/mode` `{ "mode": "mediapipe" }`
 
 `python/main.py` contiene `MotionController`, un worker único que serializa llamadas al Bridge, mantiene `desired_motion`, `current_motion` y `generation`, y descarta respuestas obsoletas. Si cambias rápido de `D` a `W`, la UI manda `turn_right` y luego `forward`; al soltar `D` no manda `stand` mientras `W` siga activo.
+
+El worker de OpenCV no llama al Bridge directamente. Lee el último frame disponible, decide el movimiento deseado y lo publica en `MotionController`, para que los movimientos de visión y manual usen la misma cola serializada.
 
 El sketch expone:
 

@@ -3,6 +3,7 @@ from __future__ import annotations
 import base64
 import json
 import logging
+import math
 import threading
 import time
 from dataclasses import dataclass
@@ -20,8 +21,20 @@ from arduino.app_bricks.web_ui import WebUI
 
 APP_DIR = Path(__file__).resolve().parent.parent
 CAMERA_DEVICE = 0
-CAMERA_FRAME_INTERVAL_SECONDS = 0.08
+CAMERA_FRAME_INTERVAL_SECONDS = 0.04
 MJPEG_PORT = 7001
+VISION_FRAME_INTERVAL_SECONDS = 0.06
+OPENCV_STEP_COOLDOWN_SECONDS = 0.65
+OPENCV_STAND_SETTLE_SECONDS = 0.25
+BLUE_HSV_LOWER = (98, 105, 55)
+BLUE_HSV_UPPER = (135, 255, 255)
+BLUE_MIN_MASK_AREA = 380
+BLUE_MIN_RADIUS = 12
+BLUE_MAX_RADIUS_RATIO = 0.32
+BLUE_MIN_CIRCULARITY = 0.72
+BLUE_MIN_FILL_RATIO = 0.50
+BLUE_MAX_FILL_RATIO = 1.18
+BLUE_CENTER_DEADZONE_RATIO = 0.14
 
 CONTROL_MODES = {"manual", "opencv", "mediapipe"}
 MOTION_MODES = {"initial", "stand", "greeting", "forward", "backward", "turn_left", "turn_right"}
@@ -53,6 +66,7 @@ logging.basicConfig(level=logging.INFO, format="[%(levelname)s] %(message)s")
 logger = logging.getLogger("uno-q-control-station")
 
 last_frame: bytes | None = None
+last_vision_frame: bytes | None = None
 last_cv_frame: Any = None
 camera_status = "Starting camera"
 camera_lock = threading.Lock()
@@ -140,8 +154,7 @@ class MotionController:
             with self._lock:
                 self._generation += 1
                 self._app_mode = normalized_mode
-                if normalized_mode != "manual":
-                    self._desired_motion = "stand"
+                self._desired_motion = "stand"
                 generation = self._generation
                 self._last_result = f"{normalized_mode} mode selected"
                 self._last_error = None
@@ -161,6 +174,24 @@ class MotionController:
             self._last_error = None
         self._wake_event.set()
         return {"ok": True, "acceptedMode": normalized_mode, "generation": generation, "state": self.snapshot_dict()}
+
+    def set_autonomous_motion(self, owner_mode: str, motion_mode: str, reason: str) -> None:
+        normalized_owner = owner_mode.strip().lower().replace("-", "_")
+        normalized_motion = motion_mode.strip().lower().replace("-", "_")
+        if normalized_owner not in {"opencv", "mediapipe"} or normalized_motion not in MOTION_MODES:
+            return
+
+        with self._lock:
+            if self._app_mode != normalized_owner:
+                return
+            if self._desired_motion == normalized_motion:
+                return
+
+            self._generation += 1
+            self._desired_motion = normalized_motion
+            self._last_result = reason
+            self._last_error = None
+        self._wake_event.set()
 
     def run_legacy_motion(self, motion: str) -> dict[str, Any]:
         normalized_motion = motion.strip().lower().replace("-", "_")
@@ -198,6 +229,10 @@ class MotionController:
             snapshot = self.snapshot()
 
             if snapshot.app_mode != "manual":
+                if snapshot.desired_motion in CONTINUOUS_MOTION_MODES:
+                    self._execute_step(snapshot.desired_motion, snapshot.generation)
+                    continue
+
                 if snapshot.current_motion != snapshot.desired_motion:
                     self._execute_step(snapshot.desired_motion, snapshot.generation)
                     continue
@@ -263,8 +298,18 @@ class MotionController:
 motion_controller = MotionController()
 
 vision_status = {
-    "opencv": "Idle: blue ball detector reserved",
+    "opencv": "Idle: blue ball tracking ready",
     "mediapipe": "Idle: hand controller reserved",
+    "blueBall": {
+        "detected": False,
+        "action": "idle",
+        "motion": "stand",
+        "x": None,
+        "y": None,
+        "radius": None,
+        "offset": None,
+        "maskArea": 0,
+    },
 }
 vision_lock = threading.Lock()
 
@@ -275,7 +320,11 @@ def state_response() -> dict[str, Any]:
         current_camera_status = camera_status
 
     with vision_lock:
-        current_vision_status = dict(vision_status)
+        current_vision_status = {
+            "opencv": vision_status["opencv"],
+            "mediapipe": vision_status["mediapipe"],
+            "blueBall": dict(vision_status["blueBall"]),
+        }
 
     return {
         "ok": True,
@@ -318,10 +367,12 @@ def mode_path_response(mode: str) -> dict[str, Any]:
 
 
 def camera_frame_response() -> dict[str, Any]:
+    snapshot = motion_controller.snapshot()
     with camera_lock:
-        if last_frame is None:
+        frame = last_vision_frame if snapshot.app_mode == "opencv" and last_vision_frame is not None else last_frame
+        if frame is None:
             return {"ok": False, "available": False, "status": camera_status}
-        encoded_frame = base64.b64encode(last_frame).decode("ascii")
+        encoded_frame = base64.b64encode(frame).decode("ascii")
         return {
             "ok": True,
             "available": True,
@@ -332,7 +383,7 @@ def camera_frame_response() -> dict[str, Any]:
 
 
 def camera_capture_loop() -> None:
-    global last_frame, last_cv_frame, camera_status
+    global last_frame, last_vision_frame, last_cv_frame, camera_status
 
     while True:
         capture = cv2.VideoCapture(CAMERA_DEVICE)
@@ -340,6 +391,7 @@ def camera_capture_loop() -> None:
             with camera_lock:
                 camera_status = f"Camera unavailable on /dev/video{CAMERA_DEVICE}"
                 last_frame = None
+                last_vision_frame = None
                 last_cv_frame = None
             time.sleep(2)
             continue
@@ -356,6 +408,7 @@ def camera_capture_loop() -> None:
                 with camera_lock:
                     camera_status = "Camera frame read failed"
                     last_frame = None
+                    last_vision_frame = None
                     last_cv_frame = None
                 break
 
@@ -372,24 +425,176 @@ def camera_capture_loop() -> None:
         time.sleep(1)
 
 
+def detect_blue_ball(frame: Any) -> dict[str, Any]:
+    height, width = frame.shape[:2]
+    hsv = cv2.cvtColor(frame, cv2.COLOR_BGR2HSV)
+    mask = cv2.inRange(hsv, BLUE_HSV_LOWER, BLUE_HSV_UPPER)
+    kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (5, 5))
+    mask = cv2.morphologyEx(mask, cv2.MORPH_OPEN, kernel)
+    mask = cv2.morphologyEx(mask, cv2.MORPH_CLOSE, kernel)
+    mask_area = int(cv2.countNonZero(mask))
+
+    detection = {
+        "detected": False,
+        "x": None,
+        "y": None,
+        "radius": None,
+        "offset": None,
+        "maskArea": mask_area,
+        "frameWidth": width,
+        "frameHeight": height,
+        "mask": mask,
+    }
+    if mask_area < BLUE_MIN_MASK_AREA:
+        return detection
+
+    blurred = cv2.GaussianBlur(mask, (9, 9), 2)
+    circles = cv2.HoughCircles(
+        blurred,
+        cv2.HOUGH_GRADIENT,
+        dp=1.2,
+        minDist=40,
+        param1=80,
+        param2=14,
+        minRadius=BLUE_MIN_RADIUS,
+        maxRadius=0,
+    )
+
+    if circles is not None:
+        circle = max(circles[0], key=lambda candidate: candidate[2])
+        x, y, radius = int(round(circle[0])), int(round(circle[1])), int(round(circle[2]))
+    else:
+        contours, _hierarchy = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+        if not contours:
+            return detection
+        contour = max(contours, key=cv2.contourArea)
+        contour_area = cv2.contourArea(contour)
+        if contour_area < BLUE_MIN_MASK_AREA:
+            return detection
+        (x_float, y_float), radius_float = cv2.minEnclosingCircle(contour)
+        x, y, radius = int(round(x_float)), int(round(y_float)), int(round(radius_float))
+
+    if radius < BLUE_MIN_RADIUS:
+        return detection
+
+    offset = (x - (width / 2)) / (width / 2)
+    detection.update(
+        {
+            "detected": True,
+            "x": x,
+            "y": y,
+            "radius": radius,
+            "offset": round(offset, 3),
+        }
+    )
+    return detection
+
+
+def choose_blue_ball_motion(detection: dict[str, Any]) -> tuple[str, str]:
+    if not detection["detected"]:
+        return "search", "turn_right"
+
+    offset = float(detection["offset"])
+    if offset < -BLUE_CENTER_DEADZONE_RATIO:
+        return "correct_left", "turn_left"
+    if offset > BLUE_CENTER_DEADZONE_RATIO:
+        return "correct_right", "turn_right"
+    return "centered_advance", "forward"
+
+
+def encode_vision_frame(frame: Any, detection: dict[str, Any], action: str, motion: str) -> bytes | None:
+    annotated = frame.copy()
+    height, width = annotated.shape[:2]
+    center_x = width // 2
+    deadzone_px = int(width * BLUE_CENTER_DEADZONE_RATIO)
+    left_limit = center_x - deadzone_px
+    right_limit = center_x + deadzone_px
+
+    cv2.line(annotated, (center_x, 0), (center_x, height), (255, 255, 255), 1)
+    cv2.line(annotated, (left_limit, 0), (left_limit, height), (0, 255, 255), 1)
+    cv2.line(annotated, (right_limit, 0), (right_limit, height), (0, 255, 255), 1)
+
+    if detection["detected"]:
+        center = (int(detection["x"]), int(detection["y"]))
+        radius = int(detection["radius"])
+        cv2.circle(annotated, center, radius, (255, 0, 0), 3)
+        cv2.circle(annotated, center, 3, (0, 255, 255), -1)
+
+    label = f"OpenCV blue ball: {action} -> {motion}"
+    cv2.rectangle(annotated, (8, height - 42), (min(width - 8, 470), height - 8), (0, 0, 0), -1)
+    cv2.putText(annotated, label, (18, height - 19), cv2.FONT_HERSHEY_SIMPLEX, 0.62, (255, 255, 255), 2)
+
+    success, jpeg = cv2.imencode(".jpg", annotated, [int(cv2.IMWRITE_JPEG_QUALITY), 82])
+    if not success:
+        return None
+    return jpeg.tobytes()
+
+
 def vision_worker_loop() -> None:
+    global last_vision_frame
+
     while True:
         snapshot = motion_controller.snapshot()
         if snapshot.app_mode not in {"opencv", "mediapipe"}:
+            with camera_lock:
+                last_vision_frame = None
             time.sleep(0.2)
             continue
 
         with camera_lock:
-            frame_ready = last_cv_frame is not None
+            frame = last_cv_frame.copy() if last_cv_frame is not None else None
 
-        with vision_lock:
-            if snapshot.app_mode == "opencv":
-                vision_status["opencv"] = "Active: waiting for blue ball detector implementation" if frame_ready else "Active: waiting for camera frame"
-            if snapshot.app_mode == "mediapipe":
-                vision_status["mediapipe"] = "Active: waiting for hand controller implementation" if frame_ready else "Active: waiting for camera frame"
+        if frame is None:
+            motion_controller.set_autonomous_motion(snapshot.app_mode, "stand", f"{snapshot.app_mode}: waiting for camera frame")
+            with vision_lock:
+                if snapshot.app_mode == "opencv":
+                    vision_status["opencv"] = "Active: waiting for camera frame"
+                    vision_status["blueBall"] = {
+                        "detected": False,
+                        "action": "waiting_for_frame",
+                        "motion": "stand",
+                        "x": None,
+                        "y": None,
+                        "radius": None,
+                        "offset": None,
+                        "maskArea": 0,
+                    }
+                if snapshot.app_mode == "mediapipe":
+                    vision_status["mediapipe"] = "Active: waiting for camera frame"
+            time.sleep(VISION_FRAME_INTERVAL_SECONDS)
+            continue
 
-        # Reserved processing hook. It intentionally never calls Bridge directly.
-        time.sleep(0.1)
+        if snapshot.app_mode == "opencv":
+            detection = detect_blue_ball(frame)
+            action, motion = choose_blue_ball_motion(detection)
+            motion_controller.set_autonomous_motion("opencv", motion, f"OpenCV blue ball {action}: {motion}")
+            encoded_frame = encode_vision_frame(frame, detection, action, motion)
+            if encoded_frame is not None:
+                with camera_lock:
+                    last_vision_frame = encoded_frame
+
+            with vision_lock:
+                vision_status["opencv"] = (
+                    f"Blue ball {action}: {motion}, offset {detection['offset']}"
+                    if detection["detected"]
+                    else "Blue ball not detected: searching right"
+                )
+                vision_status["blueBall"] = {
+                    "detected": detection["detected"],
+                    "action": action,
+                    "motion": motion,
+                    "x": detection["x"],
+                    "y": detection["y"],
+                    "radius": detection["radius"],
+                    "offset": detection["offset"],
+                    "maskArea": detection["maskArea"],
+                }
+
+        if snapshot.app_mode == "mediapipe":
+            with vision_lock:
+                vision_status["mediapipe"] = "Active: waiting for hand controller implementation"
+
+        time.sleep(VISION_FRAME_INTERVAL_SECONDS)
 
 
 class MjpegHandler(BaseHTTPRequestHandler):
@@ -407,8 +612,9 @@ class MjpegHandler(BaseHTTPRequestHandler):
         self.end_headers()
 
         while True:
+            snapshot = motion_controller.snapshot()
             with camera_lock:
-                frame = last_frame
+                frame = last_vision_frame if snapshot.app_mode == "opencv" and last_vision_frame is not None else last_frame
             if frame is None:
                 time.sleep(0.25)
                 continue

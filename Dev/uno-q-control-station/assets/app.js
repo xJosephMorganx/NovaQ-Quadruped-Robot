@@ -29,6 +29,7 @@ const elements = {
   hudMotion: document.querySelector("#hudMotion"),
   hudResult: document.querySelector("#hudResult"),
   opencvStatus: document.querySelector("#opencvStatus"),
+  blueBallStatus: document.querySelector("#blueBallStatus"),
   mediapipeStatus: document.querySelector("#mediapipeStatus"),
   poseRows: document.querySelector("#poseRows"),
   modeButtons: document.querySelectorAll("[data-mode]"),
@@ -143,6 +144,7 @@ async function loadState() {
     state.poseTable = data.poseTable || [];
     elements.cameraStatus.textContent = data.camera?.status || "Camera status unknown";
     elements.opencvStatus.textContent = data.vision?.opencv || "Reserved";
+    elements.blueBallStatus.textContent = formatBlueBallStatus(data.vision?.blueBall);
     elements.mediapipeStatus.textContent = data.vision?.mediapipe || "Reserved";
     applyMotionState(data.motion);
     renderPoseTable();
@@ -151,6 +153,17 @@ async function loadState() {
     setResult(`Connection failed: ${error.message}`);
     setConnectionStatus("Disconnected", "status-danger");
   }
+}
+
+function formatBlueBallStatus(blueBall) {
+  if (!blueBall) {
+    return "Idle";
+  }
+  if (!blueBall.detected) {
+    return `${blueBall.action || "search"} -> ${blueBall.motion || "turn_right"}`;
+  }
+  const offset = Number(blueBall.offset || 0).toFixed(2);
+  return `x ${blueBall.x}, r ${blueBall.radius}, off ${offset} -> ${blueBall.motion}`;
 }
 
 async function setMode(mode, source = "ui") {
