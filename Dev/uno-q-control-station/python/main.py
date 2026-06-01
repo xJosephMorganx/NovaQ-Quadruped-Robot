@@ -25,7 +25,6 @@ CAMERA_FRAME_INTERVAL_SECONDS = 0.04
 MJPEG_PORT = 7001
 VISION_FRAME_INTERVAL_SECONDS = 0.06
 OPENCV_STEP_COOLDOWN_SECONDS = 0.65
-OPENCV_STAND_SETTLE_SECONDS = 0.25
 OPENCV_SEARCH_BURST_STEPS = 3
 BLUE_HSV_LOWER = (98, 105, 55)
 BLUE_HSV_UPPER = (135, 255, 255)
@@ -129,6 +128,7 @@ class MotionSnapshot:
     desired_motion: str
     current_motion: str
     generation: int
+    executed_generation: int
     busy: bool
     last_result: str
     last_error: str | None
@@ -140,6 +140,7 @@ class MotionController:
         self._lock = threading.Lock()
         self._wake_event = threading.Event()
         self._generation = 0
+        self._executed_generation = 0
         self._app_mode = "manual"
         self._desired_motion = "stand"
         self._current_motion = "stand"
@@ -177,7 +178,7 @@ class MotionController:
         self._wake_event.set()
         return {"ok": True, "acceptedMode": normalized_mode, "generation": generation, "state": self.snapshot_dict()}
 
-    def set_autonomous_motion(self, owner_mode: str, motion_mode: str, reason: str) -> None:
+    def set_autonomous_motion(self, owner_mode: str, motion_mode: str, reason: str, force: bool = False) -> None:
         normalized_owner = owner_mode.strip().lower().replace("-", "_")
         normalized_motion = motion_mode.strip().lower().replace("-", "_")
         if normalized_owner not in {"opencv", "mediapipe"} or normalized_motion not in MOTION_MODES:
@@ -186,7 +187,7 @@ class MotionController:
         with self._lock:
             if self._app_mode != normalized_owner:
                 return
-            if self._desired_motion == normalized_motion:
+            if self._desired_motion == normalized_motion and not force:
                 return
 
             self._generation += 1
@@ -207,6 +208,7 @@ class MotionController:
                 desired_motion=self._desired_motion,
                 current_motion=self._current_motion,
                 generation=self._generation,
+                executed_generation=self._executed_generation,
                 busy=self._busy,
                 last_result=self._last_result,
                 last_error=self._last_error,
@@ -220,6 +222,7 @@ class MotionController:
             "desiredMotion": snapshot.desired_motion,
             "currentMotion": snapshot.current_motion,
             "generation": snapshot.generation,
+            "executedGeneration": snapshot.executed_generation,
             "busy": snapshot.busy,
             "lastResult": snapshot.last_result,
             "lastError": snapshot.last_error,
@@ -231,7 +234,7 @@ class MotionController:
             snapshot = self.snapshot()
 
             if snapshot.app_mode != "manual":
-                if snapshot.current_motion != snapshot.desired_motion:
+                if snapshot.generation != snapshot.executed_generation or snapshot.current_motion != snapshot.desired_motion:
                     self._execute_step(snapshot.desired_motion, snapshot.generation)
                     continue
 
@@ -262,10 +265,12 @@ class MotionController:
             with self._lock:
                 if generation == self._generation:
                     self._last_result = f"{motion_mode} step complete: {bridge_result}"
+                    self._executed_generation = generation
                     if motion_mode in ONE_SHOT_MOTION_MODES:
                         self._current_motion = motion_mode
                 else:
                     self._last_result = f"Ignored stale {motion_mode} response from gen {generation}"
+                    self._executed_generation = max(self._executed_generation, generation)
         except Exception as error:
             logger.exception("Bridge motion step failed")
             with self._lock:
@@ -274,6 +279,7 @@ class MotionController:
                     self._last_result = f"Bridge error: {error}"
         finally:
             with self._lock:
+                self._executed_generation = max(self._executed_generation, generation)
                 self._busy = False
 
     def _call_motion_step(self, motion_mode: str) -> Any:
@@ -575,8 +581,7 @@ def maybe_issue_opencv_motion(action: str, motion: str, detection: dict[str, Any
     with opencv_lock:
         elapsed = now - float(opencv_state["last_motion_at"])
         if elapsed < OPENCV_STEP_COOLDOWN_SECONDS:
-            motion_controller.set_autonomous_motion("opencv", "stand", "OpenCV settling image after movement")
-            return "settling", "stand"
+            return "settling", "hold"
 
     if action == "search":
         with opencv_lock:
@@ -585,7 +590,7 @@ def maybe_issue_opencv_motion(action: str, motion: str, detection: dict[str, Any
             opencv_state["search_burst_remaining"] -= 1
             burst_remaining = opencv_state["search_burst_remaining"]
 
-        motion_controller.set_autonomous_motion("opencv", motion, f"OpenCV search burst: {motion}")
+        motion_controller.set_autonomous_motion("opencv", motion, f"OpenCV search burst: {motion}", force=True)
         with opencv_lock:
             opencv_state["last_motion_at"] = now
         if burst_remaining > 0:
@@ -595,10 +600,9 @@ def maybe_issue_opencv_motion(action: str, motion: str, detection: dict[str, Any
     reset_search_burst()
 
     if detection["detected"] and not is_detection_stable(detection, action):
-        motion_controller.set_autonomous_motion("opencv", "stand", "OpenCV confirming stable ball detection")
-        return "confirming", "stand"
+        return "confirming", "hold"
 
-    motion_controller.set_autonomous_motion("opencv", motion, f"OpenCV blue ball {action}: {motion}")
+    motion_controller.set_autonomous_motion("opencv", motion, f"OpenCV blue ball {action}: {motion}", force=True)
     with opencv_lock:
         opencv_state["last_motion_at"] = now
     return action, motion
@@ -647,14 +651,13 @@ def vision_worker_loop() -> None:
             frame = last_cv_frame.copy() if last_cv_frame is not None else None
 
         if frame is None:
-            motion_controller.set_autonomous_motion(snapshot.app_mode, "stand", f"{snapshot.app_mode}: waiting for camera frame")
             with vision_lock:
                 if snapshot.app_mode == "opencv":
                     vision_status["opencv"] = "Active: waiting for camera frame"
                     vision_status["blueBall"] = {
                         "detected": False,
                         "action": "waiting_for_frame",
-                        "motion": "stand",
+                        "motion": "hold",
                         "x": None,
                         "y": None,
                         "radius": None,
