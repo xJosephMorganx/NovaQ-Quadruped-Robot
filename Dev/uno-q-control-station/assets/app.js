@@ -50,8 +50,12 @@ const poseKeyToMode = {
 
 const reservedKeyBindings = {
   PageDown: "opencv",
-  F4: "mediapipe",
+  F4: "hand_gesture",
   " ": "manual",
+};
+
+const modeLabels = {
+  hand_gesture: "hand gesture",
 };
 
 function apiUrl(path) {
@@ -107,10 +111,11 @@ function renderPoseTable() {
 }
 
 function renderMotion() {
-  elements.appMode.textContent = `Mode: ${state.appMode}`;
+  const appModeLabel = modeLabels[state.appMode] || state.appMode;
+  elements.appMode.textContent = `Mode: ${appModeLabel}`;
   elements.desiredMotion.textContent = `Desired: ${state.desiredMotion}`;
   elements.currentMotion.textContent = `Current: ${state.currentMotion}`;
-  elements.hudMode.textContent = `Mode: ${state.appMode}`;
+  elements.hudMode.textContent = `Mode: ${appModeLabel}`;
   elements.hudMotion.textContent = `Motion: ${state.desiredMotion}`;
 
   elements.modeButtons.forEach((button) => {
@@ -145,7 +150,7 @@ async function loadState() {
     elements.cameraStatus.textContent = data.camera?.status || "Camera status unknown";
     elements.opencvStatus.textContent = data.vision?.opencv || "Reserved";
     elements.blueBallStatus.textContent = formatBlueBallStatus(data.vision?.blueBall);
-    elements.mediapipeStatus.textContent = formatHandStatus(data.vision?.hand, data.vision?.mediapipe);
+    elements.mediapipeStatus.textContent = formatHandStatus(data.vision?.hand, data.vision?.handGesture || data.vision?.mediapipe);
     applyMotionState(data.motion);
     renderPoseTable();
     setConnectionStatus("Connected", "status-success");

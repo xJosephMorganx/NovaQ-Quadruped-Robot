@@ -57,7 +57,14 @@ BLUE_MAX_FILL_RATIO = 1.18
 BLUE_CENTER_DEADZONE_RATIO = 0.24
 BLUE_STABLE_DETECTIONS_REQUIRED = 2
 
-CONTROL_MODES = {"manual", "opencv", "mediapipe"}
+HAND_GESTURE_MODE = "hand_gesture"
+CONTROL_MODES = {"manual", "opencv", HAND_GESTURE_MODE}
+CONTROL_MODE_ALIASES = {
+    "hand": HAND_GESTURE_MODE,
+    "hand_gesture": HAND_GESTURE_MODE,
+    "handgesture": HAND_GESTURE_MODE,
+    "mediapipe": HAND_GESTURE_MODE,
+}
 MOTION_MODES = {"initial", "stand", "greeting", "forward", "backward", "turn_left", "turn_right"}
 CONTINUOUS_MOTION_MODES = {"forward", "backward", "turn_left", "turn_right"}
 ONE_SHOT_MOTION_MODES = {"initial", "stand", "greeting"}
@@ -106,6 +113,11 @@ GESTURE_LABEL_TO_MOTION = {
     "wave": "greeting",
     "greeting": "greeting",
 }
+
+
+def normalize_mode_name(mode: str) -> str:
+    normalized = mode.strip().lower().replace("-", "_").replace(" ", "_")
+    return CONTROL_MODE_ALIASES.get(normalized, normalized)
 
 POSE_TABLE = [
     {"name": "Shoulder_FL", "channel": 0, "initial": 170, "stand": 280, "greeting": "235-300"},
@@ -207,7 +219,7 @@ class MotionController:
         self._worker.start()
 
     def set_mode(self, mode: str) -> dict[str, Any]:
-        normalized_mode = mode.strip().lower().replace("-", "_")
+        normalized_mode = normalize_mode_name(mode)
         if normalized_mode in CONTROL_MODES:
             with self._lock:
                 self._generation += 1
@@ -238,9 +250,9 @@ class MotionController:
         return {"ok": True, "acceptedMode": normalized_mode, "generation": generation, "state": self.snapshot_dict()}
 
     def set_autonomous_motion(self, owner_mode: str, motion_mode: str, reason: str, force: bool = False) -> None:
-        normalized_owner = owner_mode.strip().lower().replace("-", "_")
+        normalized_owner = normalize_mode_name(owner_mode)
         normalized_motion = motion_mode.strip().lower().replace("-", "_")
-        if normalized_owner not in {"opencv", "mediapipe"} or normalized_motion not in MOTION_MODES:
+        if normalized_owner not in {"opencv", HAND_GESTURE_MODE} or normalized_motion not in MOTION_MODES:
             return
 
         with self._lock:
@@ -362,7 +374,8 @@ motion_controller = MotionController()
 
 vision_status = {
     "opencv": "Idle: blue ball tracking ready",
-    "mediapipe": "Idle: hand controller ready",
+    "handGesture": "Idle: hand gesture controller ready",
+    "mediapipe": "Idle: hand gesture controller ready",
     "blueBall": {
         "detected": False,
         "action": "idle",
@@ -404,7 +417,8 @@ def state_response() -> dict[str, Any]:
     with vision_lock:
         current_vision_status = {
             "opencv": vision_status["opencv"],
-            "mediapipe": vision_status["mediapipe"],
+            "handGesture": vision_status["handGesture"],
+            "mediapipe": vision_status["handGesture"],
             "blueBall": dict(vision_status["blueBall"]),
             "hand": dict(vision_status["hand"]),
         }
@@ -452,7 +466,11 @@ def mode_path_response(mode: str) -> dict[str, Any]:
 def camera_frame_response() -> dict[str, Any]:
     snapshot = motion_controller.snapshot()
     with camera_lock:
-        frame = last_vision_frame if snapshot.app_mode in {"opencv", "mediapipe"} and last_vision_frame is not None else last_frame
+        frame = (
+            last_vision_frame
+            if snapshot.app_mode in {"opencv", HAND_GESTURE_MODE} and last_vision_frame is not None
+            else last_frame
+        )
         if frame is None:
             return {"ok": False, "available": False, "status": camera_status}
         encoded_frame = base64.b64encode(frame).decode("ascii")
@@ -469,7 +487,7 @@ def camera_capture_loop() -> None:
     global last_frame, last_vision_frame, last_cv_frame, camera_status
 
     while True:
-        if motion_controller.snapshot().app_mode == "mediapipe":
+        if ENABLE_GESTURE_BRICK and motion_controller.snapshot().app_mode == HAND_GESTURE_MODE:
             with camera_lock:
                 camera_status = "Camera reserved for gesture detection brick"
                 last_frame = None
@@ -494,7 +512,7 @@ def camera_capture_loop() -> None:
             camera_status = "Camera connected"
 
         while capture.isOpened():
-            if motion_controller.snapshot().app_mode == "mediapipe":
+            if ENABLE_GESTURE_BRICK and motion_controller.snapshot().app_mode == HAND_GESTURE_MODE:
                 with camera_lock:
                     camera_status = "Camera reserved for gesture detection brick"
                     last_frame = None
@@ -883,7 +901,7 @@ def maybe_issue_hand_motion(hand_info: dict[str, Any]) -> tuple[str, str]:
             return "cooldown", "hold"
         hand_state["last_motion_at"] = now
 
-    motion_controller.set_autonomous_motion("mediapipe", motion, f"OpenCV hand gesture {gesture}: {motion}", force=True)
+    motion_controller.set_autonomous_motion(HAND_GESTURE_MODE, motion, f"OpenCV hand gesture {gesture}: {motion}", force=True)
     return gesture, motion
 
 
@@ -997,7 +1015,7 @@ def maybe_issue_gesture_brick_motion(gesture: dict[str, Any]) -> tuple[str, str]
             return "cooldown", "hold"
         hand_state["last_motion_at"] = now
 
-    motion_controller.set_autonomous_motion("mediapipe", motion, f"Gesture brick {label}: {motion}", force=True)
+    motion_controller.set_autonomous_motion(HAND_GESTURE_MODE, motion, f"Gesture brick {label}: {motion}", force=True)
     return label, motion
 
 
@@ -1008,13 +1026,14 @@ def on_gesture_detections(detections: dict[str, Any], frame: bytes | None = None
     if encoded_frame is not None:
         with camera_lock:
             last_vision_frame = encoded_frame
-            if motion_controller.snapshot().app_mode == "mediapipe":
+            if motion_controller.snapshot().app_mode == HAND_GESTURE_MODE:
                 camera_status = "Gesture detection brick preview active"
 
     best_detection = best_gesture_detection(detections)
     if best_detection is None:
         with vision_lock:
-            vision_status["mediapipe"] = "Gesture brick active: no hand gesture"
+            vision_status["handGesture"] = "Gesture brick active: no hand gesture"
+            vision_status["mediapipe"] = vision_status["handGesture"]
             vision_status["hand"] = {
                 "detected": False,
                 "gesture": "none",
@@ -1027,13 +1046,14 @@ def on_gesture_detections(detections: dict[str, Any], frame: bytes | None = None
     gesture_label = best_detection["normalizedLabel"]
     motion = best_detection["motion"]
     action = gesture_label
-    if snapshot.app_mode != "mediapipe":
+    if snapshot.app_mode != HAND_GESTURE_MODE:
         motion = "hold"
     else:
         action, motion = maybe_issue_gesture_brick_motion(best_detection)
 
     with vision_lock:
-        vision_status["mediapipe"] = f"Gesture brick {action}: {motion}"
+        vision_status["handGesture"] = f"Gesture brick {action}: {motion}"
+        vision_status["mediapipe"] = vision_status["handGesture"]
         vision_status["hand"] = {
             "detected": True,
             "gesture": gesture_label,
@@ -1046,13 +1066,15 @@ def on_gesture_detections(detections: dict[str, Any], frame: bytes | None = None
 def setup_gesture_detector() -> Any:
     if not ENABLE_GESTURE_BRICK:
         with vision_lock:
-            vision_status["mediapipe"] = "Gesture brick disabled: web startup protected"
+            vision_status["handGesture"] = "OpenCV hand gesture fallback active"
+            vision_status["mediapipe"] = vision_status["handGesture"]
         return None
 
     if VideoObjectDetection is None:
         error = f"Gesture brick unavailable: {VIDEO_OBJECT_DETECTION_IMPORT_ERROR}"
         logger.warning(error)
         with vision_lock:
+            vision_status["handGesture"] = error
             vision_status["mediapipe"] = error
         return None
 
@@ -1060,12 +1082,14 @@ def setup_gesture_detector() -> Any:
         detector = VideoObjectDetection(confidence=0.45, debounce_sec=0.25, camera_preview=True)
         detector.on_detect_all(on_gesture_detections)
         with vision_lock:
-            vision_status["mediapipe"] = "Gesture brick ready: waiting for hand"
+            vision_status["handGesture"] = "Gesture brick ready: waiting for hand"
+            vision_status["mediapipe"] = vision_status["handGesture"]
         return detector
     except Exception as error:
         logger.exception("Failed to initialize gesture detection brick")
         with vision_lock:
-            vision_status["mediapipe"] = f"Gesture brick init failed: {error}"
+            vision_status["handGesture"] = f"Gesture brick init failed: {error}"
+            vision_status["mediapipe"] = vision_status["handGesture"]
         return None
 
 
@@ -1074,16 +1098,17 @@ def vision_worker_loop() -> None:
 
     while True:
         snapshot = motion_controller.snapshot()
-        if snapshot.app_mode not in {"opencv", "mediapipe"}:
+        if snapshot.app_mode not in {"opencv", HAND_GESTURE_MODE}:
             with camera_lock:
                 last_vision_frame = None
             time.sleep(0.2)
             continue
 
-        if snapshot.app_mode == "mediapipe":
+        if snapshot.app_mode == HAND_GESTURE_MODE and ENABLE_GESTURE_BRICK:
             with vision_lock:
-                if vision_status["mediapipe"].startswith("Idle"):
-                    vision_status["mediapipe"] = "Gesture brick active: waiting for hand"
+                if vision_status["handGesture"].startswith("Idle"):
+                    vision_status["handGesture"] = "Gesture brick active: waiting for hand"
+                    vision_status["mediapipe"] = vision_status["handGesture"]
             time.sleep(0.2)
             continue
 
@@ -1136,6 +1161,24 @@ def vision_worker_loop() -> None:
                     "rejectReason": detection["rejectReason"],
                 }
 
+        if snapshot.app_mode == HAND_GESTURE_MODE:
+            encoded_frame, hand_status = process_hand_frame(frame)
+            if encoded_frame is not None:
+                with camera_lock:
+                    last_vision_frame = encoded_frame
+            with vision_lock:
+                vision_status["handGesture"] = hand_status["status"]
+                vision_status["mediapipe"] = vision_status["handGesture"]
+                vision_status["hand"] = {
+                    "detected": hand_status["detected"],
+                    "gesture": hand_status["gesture"],
+                    "motion": hand_status["motion"],
+                    "confidence": hand_status["confidence"],
+                    "fingerCount": hand_status.get("fingerCount", 0),
+                    "defectCount": hand_status.get("defectCount", 0),
+                    "solidity": hand_status.get("solidity", 0),
+                }
+
         time.sleep(VISION_FRAME_INTERVAL_SECONDS)
 
 
@@ -1156,7 +1199,11 @@ class MjpegHandler(BaseHTTPRequestHandler):
         while True:
             snapshot = motion_controller.snapshot()
             with camera_lock:
-                frame = last_vision_frame if snapshot.app_mode in {"opencv", "mediapipe"} and last_vision_frame is not None else last_frame
+                frame = (
+                    last_vision_frame
+                    if snapshot.app_mode in {"opencv", HAND_GESTURE_MODE} and last_vision_frame is not None
+                    else last_frame
+                )
             if frame is None:
                 time.sleep(0.25)
                 continue
@@ -1203,7 +1250,8 @@ web_ui.expose_api("GET", "/api/mode/turn-left", lambda: mode_path_response("turn
 web_ui.expose_api("GET", "/api/mode/turn-right", lambda: mode_path_response("turn_right"))
 web_ui.expose_api("GET", "/api/mode/manual", lambda: mode_path_response("manual"))
 web_ui.expose_api("GET", "/api/mode/opencv", lambda: mode_path_response("opencv"))
-web_ui.expose_api("GET", "/api/mode/mediapipe", lambda: mode_path_response("mediapipe"))
+web_ui.expose_api("GET", "/api/mode/hand-gesture", lambda: mode_path_response(HAND_GESTURE_MODE))
+web_ui.expose_api("GET", "/api/mode/mediapipe", lambda: mode_path_response(HAND_GESTURE_MODE))
 web_ui.expose_api("GET", "/api/motion", motion_response)
 web_ui.expose_api("POST", "/api/motion", motion_response)
 web_ui.expose_api("GET", "/api/camera-frame", camera_frame_response)

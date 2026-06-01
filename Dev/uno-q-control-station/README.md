@@ -18,7 +18,7 @@ Nueva app independiente para controlar el robot cuadrúpedo UNO Q sin reemplazar
   - Escape: focus/camera view
   - Space: `manual`
   - PageDown: `opencv`
-  - F4: `mediapipe`
+  - F4: `hand_gesture`
 - Modo OpenCV con tracking básico de pelota azul:
   - Máscara HSV azul.
   - Detector estricto por contorno circular: radio máximo, circularidad y densidad de relleno.
@@ -27,7 +27,7 @@ Nueva app independiente para controlar el robot cuadrúpedo UNO Q sin reemplazar
   - Si detecta pelota centrada: avanza hacia adelante.
   - Entre movimientos espera 3 segundos sin mandar `stand`, para no revertir el avance o el giro recién hecho.
   - El feed muestra una vista anotada mientras OpenCV está activo.
-- Modo MediaPipe/Hand usando el brick `arduino:video_object_detection`:
+- Modo Hand Gesture usando OpenCV local o el brick `arduino:video_object_detection`:
   - Usa un modelo Edge Impulse en `/home/arduino/.arduino-bricks/ei-models/hand_gesture.eim`.
   - El brick detecta gestos de mano desnuda y entrega etiqueta, confianza y bounding box.
   - La app mapea etiquetas comunes (`open_palm`, `fist`, `one`, `two`, `left`, `right`, `wave`) a movimientos del robot.
@@ -47,7 +47,7 @@ La UI ya no encola un request por cada step mientras una tecla está presionada.
 - `POST /api/mode` `{ "mode": "stand" }`
 - `POST /api/mode` `{ "mode": "manual" }`
 - `POST /api/mode` `{ "mode": "opencv" }`
-- `POST /api/mode` `{ "mode": "mediapipe" }`
+- `POST /api/mode` `{ "mode": "hand_gesture" }`
 
 `python/main.py` contiene `MotionController`, un worker único que serializa llamadas al Bridge, mantiene `desired_motion`, `current_motion` y `generation`, y descarta respuestas obsoletas. Si cambias rápido de `D` a `W`, la UI manda `turn_right` y luego `forward`; al soltar `D` no manda `stand` mientras `W` siga activo.
 
