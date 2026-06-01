@@ -21,8 +21,10 @@ from arduino.app_bricks.web_ui import WebUI
 
 try:
     from arduino.app_bricks.video_objectdetection import VideoObjectDetection
+    from arduino.app_peripherals.camera import BaseCamera
     from arduino.app_utils.image import draw_bounding_boxes, get_image_bytes
 except Exception as import_error:  # pragma: no cover - depends on App Lab brick runtime
+    BaseCamera = None
     VideoObjectDetection = None
     draw_bounding_boxes = None
     get_image_bytes = None
@@ -38,14 +40,9 @@ MJPEG_PORT = 7001
 VISION_FRAME_INTERVAL_SECONDS = 0.06
 OPENCV_STEP_COOLDOWN_SECONDS = 3.0
 OPENCV_SEARCH_BURST_STEPS = 3
-ENABLE_GESTURE_BRICK = os.environ.get("UNO_Q_ENABLE_GESTURE_BRICK", "").strip().lower() in {"1", "true", "yes"}
+ENABLE_GESTURE_BRICK = os.environ.get("UNO_Q_ENABLE_GESTURE_BRICK", "1").strip().lower() not in {"0", "false", "no"}
 HAND_ACTION_COOLDOWN_SECONDS = 1.0
 HAND_STABLE_GESTURES_REQUIRED = 3
-HAND_MIN_AREA_RATIO = 0.025
-HAND_MAX_AREA_RATIO = 0.55
-HAND_MIN_SOLIDITY = 0.38
-HAND_DEFECT_ANGLE_DEGREES = 82
-HAND_DEFECT_DEPTH_RATIO = 0.035
 BLUE_HSV_LOWER = (98, 105, 55)
 BLUE_HSV_UPPER = (135, 255, 255)
 BLUE_MIN_MASK_AREA = 380
@@ -138,6 +135,66 @@ last_vision_frame: bytes | None = None
 last_cv_frame: Any = None
 camera_status = "Starting camera"
 camera_lock = threading.Lock()
+
+
+if BaseCamera is not None:
+    class DirectOpenCVCamera(BaseCamera):
+        def __init__(self, device: int = CAMERA_DEVICE, resolution: tuple[int, int] = (640, 480), fps: int = 10) -> None:
+            super().__init__(resolution=resolution, fps=fps, auto_reconnect=True)
+            self.device = device
+            self.name = f"/dev/video{device}"
+            self._capture: Any = None
+
+        def _open_camera(self) -> None:
+            self._close_camera()
+            capture = cv2.VideoCapture(self.device)
+            if not capture.isOpened():
+                raise RuntimeError(f"Failed to open /dev/video{self.device}")
+
+            capture.set(cv2.CAP_PROP_BUFFERSIZE, 1)
+            capture.set(cv2.CAP_PROP_FRAME_WIDTH, self.resolution[0])
+            capture.set(cv2.CAP_PROP_FRAME_HEIGHT, self.resolution[1])
+            capture.set(cv2.CAP_PROP_FPS, self.fps)
+
+            success, frame = capture.read()
+            if not success or frame is None:
+                capture.release()
+                raise RuntimeError(f"Read test failed for /dev/video{self.device}")
+
+            self._capture = capture
+            self._publish_frame(frame)
+            self._set_status("connected", {"camera_name": self.name, "camera_path": self.name})
+
+        def _close_camera(self) -> None:
+            if self._capture is not None:
+                self._capture.release()
+                self._capture = None
+            self._set_status("disconnected", {"camera_name": self.name, "camera_path": self.name})
+
+        def _read_frame(self) -> Any | None:
+            if self._capture is None:
+                self._open_camera()
+            if self._capture is None:
+                return None
+
+            success, frame = self._capture.read()
+            if not success or frame is None:
+                self._close_camera()
+                return None
+
+            self._publish_frame(frame)
+            return frame
+
+        def _publish_frame(self, frame: Any) -> None:
+            global camera_status, last_cv_frame, last_frame
+            success, jpeg = cv2.imencode(".jpg", frame, [int(cv2.IMWRITE_JPEG_QUALITY), 80])
+            if success:
+                with camera_lock:
+                    last_frame = jpeg.tobytes()
+                    last_cv_frame = frame.copy()
+                    camera_status = "Camera connected via gesture brick"
+else:
+    DirectOpenCVCamera = None
 
 
 def parse_request_data(request: Any) -> dict[str, Any]:
@@ -487,14 +544,6 @@ def camera_capture_loop() -> None:
     global last_frame, last_vision_frame, last_cv_frame, camera_status
 
     while True:
-        if ENABLE_GESTURE_BRICK and motion_controller.snapshot().app_mode == HAND_GESTURE_MODE:
-            with camera_lock:
-                camera_status = "Camera reserved for gesture detection brick"
-                last_frame = None
-                last_cv_frame = None
-            time.sleep(1)
-            continue
-
         capture = cv2.VideoCapture(CAMERA_DEVICE)
         if not capture.isOpened():
             with camera_lock:
@@ -512,13 +561,6 @@ def camera_capture_loop() -> None:
             camera_status = "Camera connected"
 
         while capture.isOpened():
-            if ENABLE_GESTURE_BRICK and motion_controller.snapshot().app_mode == HAND_GESTURE_MODE:
-                with camera_lock:
-                    camera_status = "Camera reserved for gesture detection brick"
-                    last_frame = None
-                    last_cv_frame = None
-                break
-
             success, frame = capture.read()
             if not success:
                 with camera_lock:
@@ -741,213 +783,6 @@ def encode_vision_frame(frame: Any, detection: dict[str, Any], action: str, moti
     return jpeg.tobytes()
 
 
-def segment_skin_mask(frame: Any) -> Any:
-    blurred = cv2.GaussianBlur(frame, (5, 5), 0)
-    ycrcb = cv2.cvtColor(blurred, cv2.COLOR_BGR2YCrCb)
-    hsv = cv2.cvtColor(blurred, cv2.COLOR_BGR2HSV)
-    ycrcb_mask = cv2.inRange(ycrcb, (0, 133, 77), (255, 173, 127))
-    hsv_mask = cv2.inRange(hsv, (0, 25, 35), (25, 210, 255))
-    mask = cv2.bitwise_and(ycrcb_mask, hsv_mask)
-    kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (7, 7))
-    mask = cv2.morphologyEx(mask, cv2.MORPH_OPEN, kernel)
-    mask = cv2.morphologyEx(mask, cv2.MORPH_CLOSE, kernel)
-    mask = cv2.dilate(mask, kernel, iterations=1)
-    return mask
-
-
-def angle_degrees(first: tuple[int, int], middle: tuple[int, int], last: tuple[int, int]) -> float:
-    ax, ay = first[0] - middle[0], first[1] - middle[1]
-    bx, by = last[0] - middle[0], last[1] - middle[1]
-    denominator = math.hypot(ax, ay) * math.hypot(bx, by)
-    if denominator == 0:
-        return 180
-    cosine = max(-1.0, min(1.0, ((ax * bx) + (ay * by)) / denominator))
-    return math.degrees(math.acos(cosine))
-
-
-def analyze_hand_frame(frame: Any) -> dict[str, Any]:
-    height, width = frame.shape[:2]
-    frame_area = width * height
-    mask = segment_skin_mask(frame)
-    contours, _hierarchy = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-    analysis = {
-        "detected": False,
-        "gesture": "none",
-        "motion": "hold",
-        "confidence": 0,
-        "fingerCount": 0,
-        "defectCount": 0,
-        "area": 0,
-        "solidity": 0,
-        "center": None,
-        "contour": None,
-        "hullPoints": None,
-        "fingerTips": [],
-        "defectPoints": [],
-        "mask": mask,
-        "status": "No hand detected",
-    }
-    if not contours:
-        return analysis
-
-    contour = max(contours, key=cv2.contourArea)
-    area = cv2.contourArea(contour)
-    area_ratio = area / frame_area
-    if area_ratio < HAND_MIN_AREA_RATIO or area_ratio > HAND_MAX_AREA_RATIO:
-        analysis.update({"area": int(area), "status": "Hand candidate out of area range"})
-        return analysis
-
-    hull_indices = cv2.convexHull(contour, returnPoints=False)
-    hull_points = cv2.convexHull(contour, returnPoints=True)
-    hull_area = cv2.contourArea(hull_points)
-    solidity = area / hull_area if hull_area else 0
-    if solidity < HAND_MIN_SOLIDITY or hull_indices is None or len(hull_indices) < 4:
-        analysis.update({"area": int(area), "solidity": round(solidity, 3), "status": "Hand candidate not solid enough"})
-        return analysis
-
-    moments = cv2.moments(contour)
-    if moments["m00"] == 0:
-        return analysis
-    center = (int(moments["m10"] / moments["m00"]), int(moments["m01"] / moments["m00"]))
-
-    defects = cv2.convexityDefects(contour, hull_indices)
-    defect_points = []
-    if defects is not None:
-        for defect in defects[:, 0]:
-            start_index, end_index, far_index, depth = defect
-            start = tuple(contour[start_index][0])
-            end = tuple(contour[end_index][0])
-            far = tuple(contour[far_index][0])
-            angle = angle_degrees(start, far, end)
-            if angle < HAND_DEFECT_ANGLE_DEGREES and depth / 256.0 > height * HAND_DEFECT_DEPTH_RATIO:
-                defect_points.append(far)
-
-    top_hull_points = sorted((tuple(point[0]) for point in hull_points if point[0][1] < center[1]), key=lambda item: item[1])
-    finger_tips = []
-    min_tip_distance = max(22, int(width * 0.045))
-    for point in top_hull_points:
-        if all(math.hypot(point[0] - existing[0], point[1] - existing[1]) > min_tip_distance for existing in finger_tips):
-            finger_tips.append(point)
-        if len(finger_tips) >= 5:
-            break
-
-    finger_count = max(0, min(5, len(defect_points) + 1 if defect_points else len(finger_tips)))
-    x, y, box_width, box_height = cv2.boundingRect(contour)
-    aspect_ratio = box_height / max(1, box_width)
-
-    gesture = "unknown"
-    motion = "hold"
-    confidence = 0.55
-    if finger_count >= 4:
-        gesture, motion, confidence = "open_palm", "stand", 0.78
-    elif finger_count == 0 and solidity > 0.72:
-        gesture, motion, confidence = "fist", "initial", 0.72
-    elif finger_count == 1:
-        if center[0] < width * 0.38:
-            gesture, motion, confidence = "hand_left", "turn_left", 0.68
-        elif center[0] > width * 0.62:
-            gesture, motion, confidence = "hand_right", "turn_right", 0.68
-        elif aspect_ratio > 1.1:
-            gesture, motion, confidence = "one_finger", "forward", 0.7
-    elif finger_count == 2:
-        gesture, motion, confidence = "two_fingers", "backward", 0.7
-    elif finger_count == 3:
-        gesture, motion, confidence = "three_fingers", "greeting", 0.68
-
-    analysis.update(
-        {
-            "detected": True,
-            "gesture": gesture,
-            "motion": motion,
-            "confidence": confidence,
-            "fingerCount": finger_count,
-            "defectCount": len(defect_points),
-            "area": int(area),
-            "solidity": round(solidity, 3),
-            "center": center,
-            "contour": contour,
-            "hullPoints": hull_points,
-            "fingerTips": finger_tips,
-            "defectPoints": defect_points,
-            "status": f"Hand {gesture}: {motion}",
-        }
-    )
-    return analysis
-
-
-def is_hand_gesture_stable(gesture: str) -> bool:
-    with hand_lock:
-        if hand_state["last_gesture"] == gesture:
-            hand_state["stable_gesture_count"] += 1
-        else:
-            hand_state["last_gesture"] = gesture
-            hand_state["stable_gesture_count"] = 1
-        return hand_state["stable_gesture_count"] >= HAND_STABLE_GESTURES_REQUIRED
-
-
-def maybe_issue_hand_motion(hand_info: dict[str, Any]) -> tuple[str, str]:
-    gesture = hand_info["gesture"]
-    motion = hand_info["motion"]
-    if motion == "hold" or gesture == "unknown":
-        return gesture, "hold"
-
-    if not is_hand_gesture_stable(gesture):
-        return "confirming", "hold"
-
-    now = time.monotonic()
-    with hand_lock:
-        elapsed = now - float(hand_state["last_motion_at"])
-        if elapsed < HAND_ACTION_COOLDOWN_SECONDS:
-            return "cooldown", "hold"
-        hand_state["last_motion_at"] = now
-
-    motion_controller.set_autonomous_motion(HAND_GESTURE_MODE, motion, f"OpenCV hand gesture {gesture}: {motion}", force=True)
-    return gesture, motion
-
-
-def encode_hand_frame(frame: Any, hand_info: dict[str, Any], gesture: str, motion: str) -> bytes | None:
-    annotated = frame.copy()
-    contour = hand_info.get("contour")
-    hull_points = hand_info.get("hullPoints")
-    if contour is not None:
-        cv2.drawContours(annotated, [contour], -1, (0, 255, 0), 2)
-    if hull_points is not None:
-        cv2.drawContours(annotated, [hull_points], -1, (255, 255, 0), 2)
-    for point in hand_info.get("fingerTips", []):
-        cv2.circle(annotated, point, 8, (0, 255, 255), -1)
-    for point in hand_info.get("defectPoints", []):
-        cv2.circle(annotated, point, 6, (0, 0, 255), -1)
-    if hand_info.get("center"):
-        cv2.circle(annotated, hand_info["center"], 7, (255, 0, 255), -1)
-
-    height, width = annotated.shape[:2]
-    label = f"OpenCV hand: {gesture} -> {motion} fingers={hand_info.get('fingerCount', 0)}"
-    cv2.rectangle(annotated, (8, height - 42), (min(width - 8, 590), height - 8), (0, 0, 0), -1)
-    cv2.putText(annotated, label, (18, height - 19), cv2.FONT_HERSHEY_SIMPLEX, 0.58, (255, 255, 255), 2)
-
-    success, jpeg = cv2.imencode(".jpg", annotated, [int(cv2.IMWRITE_JPEG_QUALITY), 82])
-    if not success:
-        return None
-    return jpeg.tobytes()
-
-
-def process_hand_frame(frame: Any) -> tuple[bytes | None, dict[str, Any]]:
-    hand_info = analyze_hand_frame(frame)
-    if not hand_info["detected"]:
-        with hand_lock:
-            hand_state["last_gesture"] = None
-            hand_state["stable_gesture_count"] = 0
-        encoded_frame = encode_hand_frame(frame, hand_info, hand_info["gesture"], "hold")
-        return encoded_frame, hand_info
-
-    gesture, motion = maybe_issue_hand_motion(hand_info)
-    encoded_frame = encode_hand_frame(frame, hand_info, gesture, motion)
-    hand_info["gesture"] = gesture
-    hand_info["motion"] = motion
-    hand_info["status"] = f"Hand {gesture}: {motion}"
-    return encoded_frame, hand_info
-
-
 def normalize_gesture_label(label: str) -> str:
     return label.strip().lower().replace(" ", "_").replace("-", "_")
 
@@ -1066,11 +901,11 @@ def on_gesture_detections(detections: dict[str, Any], frame: bytes | None = None
 def setup_gesture_detector() -> Any:
     if not ENABLE_GESTURE_BRICK:
         with vision_lock:
-            vision_status["handGesture"] = "OpenCV hand gesture fallback active"
+            vision_status["handGesture"] = "Gesture brick disabled"
             vision_status["mediapipe"] = vision_status["handGesture"]
         return None
 
-    if VideoObjectDetection is None:
+    if VideoObjectDetection is None or DirectOpenCVCamera is None:
         error = f"Gesture brick unavailable: {VIDEO_OBJECT_DETECTION_IMPORT_ERROR}"
         logger.warning(error)
         with vision_lock:
@@ -1079,7 +914,8 @@ def setup_gesture_detector() -> Any:
         return None
 
     try:
-        detector = VideoObjectDetection(confidence=0.45, debounce_sec=0.25, camera_preview=True)
+        camera = DirectOpenCVCamera(device=CAMERA_DEVICE, resolution=(640, 480), fps=10)
+        detector = VideoObjectDetection(camera=camera, confidence=0.45, debounce_sec=0.25, camera_preview=True)
         detector.on_detect_all(on_gesture_detections)
         with vision_lock:
             vision_status["handGesture"] = "Gesture brick ready: waiting for hand"
@@ -1104,10 +940,13 @@ def vision_worker_loop() -> None:
             time.sleep(0.2)
             continue
 
-        if snapshot.app_mode == HAND_GESTURE_MODE and ENABLE_GESTURE_BRICK:
+        if snapshot.app_mode == HAND_GESTURE_MODE:
             with vision_lock:
-                if vision_status["handGesture"].startswith("Idle"):
-                    vision_status["handGesture"] = "Gesture brick active: waiting for hand"
+                if ENABLE_GESTURE_BRICK:
+                    if vision_status["handGesture"].startswith("Idle"):
+                        vision_status["handGesture"] = "Gesture brick active: waiting for hand"
+                else:
+                    vision_status["handGesture"] = "Gesture brick disabled"
                     vision_status["mediapipe"] = vision_status["handGesture"]
             time.sleep(0.2)
             continue
@@ -1159,24 +998,6 @@ def vision_worker_loop() -> None:
                     "circularity": detection["circularity"],
                     "fillRatio": detection["fillRatio"],
                     "rejectReason": detection["rejectReason"],
-                }
-
-        if snapshot.app_mode == HAND_GESTURE_MODE:
-            encoded_frame, hand_status = process_hand_frame(frame)
-            if encoded_frame is not None:
-                with camera_lock:
-                    last_vision_frame = encoded_frame
-            with vision_lock:
-                vision_status["handGesture"] = hand_status["status"]
-                vision_status["mediapipe"] = vision_status["handGesture"]
-                vision_status["hand"] = {
-                    "detected": hand_status["detected"],
-                    "gesture": hand_status["gesture"],
-                    "motion": hand_status["motion"],
-                    "confidence": hand_status["confidence"],
-                    "fingerCount": hand_status.get("fingerCount", 0),
-                    "defectCount": hand_status.get("defectCount", 0),
-                    "solidity": hand_status.get("solidity", 0),
                 }
 
         time.sleep(VISION_FRAME_INTERVAL_SECONDS)
@@ -1233,7 +1054,8 @@ def start_mjpeg_server() -> None:
 
 
 gesture_detector = setup_gesture_detector()
-threading.Thread(target=camera_capture_loop, daemon=True).start()
+if not ENABLE_GESTURE_BRICK or gesture_detector is None:
+    threading.Thread(target=camera_capture_loop, daemon=True).start()
 threading.Thread(target=vision_worker_loop, daemon=True).start()
 threading.Thread(target=start_mjpeg_server, daemon=True).start()
 

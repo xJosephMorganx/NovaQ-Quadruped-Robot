@@ -27,13 +27,13 @@ Nueva app independiente para controlar el robot cuadrúpedo UNO Q sin reemplazar
   - Si detecta pelota centrada: avanza hacia adelante.
   - Entre movimientos espera 3 segundos sin mandar `stand`, para no revertir el avance o el giro recién hecho.
   - El feed muestra una vista anotada mientras OpenCV está activo.
-- Modo Hand Gesture usando OpenCV local o el brick `arduino:video_object_detection`:
+- Modo Hand Gesture usando solo el brick `arduino:video_object_detection`:
   - Usa un modelo Edge Impulse en `/home/arduino/.arduino-bricks/ei-models/hand_gesture.eim`.
   - El brick detecta gestos de mano desnuda y entrega etiqueta, confianza y bounding box.
   - La app mapea etiquetas comunes (`open_palm`, `fist`, `one`, `two`, `left`, `right`, `wave`) a movimientos del robot.
   - Si no detecta mano o la etiqueta no esta mapeada: no manda movimiento.
-  - En modo de gestos, la camara se reserva para el brick para evitar que OpenCV y Edge Impulse compitan por `/dev/video0`.
-  - Por seguridad de arranque, el brick queda desactivado por defecto. Para probarlo, reactivar el bloque de `app.yaml` y arrancar Python con `UNO_Q_ENABLE_GESTURE_BRICK=1`.
+  - La camara del brick usa `/dev/video0` directo y alimenta tambien el feed de la UI.
+  - OpenCV queda reservado solo para el modo de pelota azul.
 - Sketch con PCA9685 en `0x40`, canales `0-7`, `50 Hz`, reutilizando pulsos, poses y gait del prototipo.
 
 ## Arquitectura de movimiento
