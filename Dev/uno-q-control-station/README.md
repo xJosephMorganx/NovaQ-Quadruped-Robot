@@ -31,7 +31,7 @@ Nueva app independiente para controlar el robot cuadrúpedo UNO Q sin reemplazar
   - Usa un modelo Edge Impulse en `/home/arduino/.arduino-bricks/ei-models/hand_gesture.eim`.
   - El brick detecta gestos de mano desnuda y entrega etiqueta, confianza y bounding box.
   - La app usa solo las cuatro etiquetas del modelo incluido:
-    `Good -> forward`, `Bad -> backward`, `Peace -> greeting`, `Neutral -> turn_right`.
+    `five -> stand`, `good -> forward`, `neut -> backward`, `peace -> greeting`.
   - El mismo gesto se dispara una vez, con cooldown de 2.5 segundos, para evitar que un reconocimiento sostenido bloquee el control.
   - Si no detecta mano o la etiqueta no esta mapeada: no manda movimiento.
   - La camara del brick usa `/dev/video0` directo y alimenta tambien el feed de la UI.

@@ -76,10 +76,10 @@ MODE_TO_LEGACY_MOTION = {
 }
 LEGACY_MOTION_TO_MODE = {legacy: mode for mode, legacy in MODE_TO_LEGACY_MOTION.items()}
 GESTURE_LABEL_TO_MOTION = {
+    "five": "stand",
     "good": "forward",
-    "bad": "backward",
+    "neut": "backward",
     "peace": "greeting",
-    "neutral": "turn_right",
 }
 
 
