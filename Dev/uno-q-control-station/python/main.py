@@ -38,6 +38,7 @@ CAMERA_DEVICE = 0
 CAMERA_FRAME_INTERVAL_SECONDS = 0.04
 MJPEG_PORT = 7001
 VISION_FRAME_INTERVAL_SECONDS = 0.06
+VISION_FRAME_TTL_SECONDS = 0.8
 OPENCV_STEP_COOLDOWN_SECONDS = 3.0
 OPENCV_SEARCH_BURST_STEPS = 3
 ENABLE_GESTURE_BRICK = os.environ.get("UNO_Q_ENABLE_GESTURE_BRICK", "1").strip().lower() not in {"0", "false", "no"}
@@ -103,6 +104,7 @@ logger = logging.getLogger("uno-q-control-station")
 
 last_frame: bytes | None = None
 last_vision_frame: bytes | None = None
+last_vision_frame_at = 0.0
 last_cv_frame: Any = None
 camera_status = "Starting camera"
 camera_lock = threading.Lock()
@@ -493,14 +495,21 @@ def mode_path_response(mode: str) -> dict[str, Any]:
     return motion_controller.set_mode(mode)
 
 
+def choose_camera_frame(snapshot: MotionSnapshot) -> bytes | None:
+    vision_age = time.monotonic() - last_vision_frame_at
+    if (
+        snapshot.app_mode in {"opencv", HAND_GESTURE_MODE}
+        and last_vision_frame is not None
+        and vision_age <= VISION_FRAME_TTL_SECONDS
+    ):
+        return last_vision_frame
+    return last_frame
+
+
 def camera_frame_response() -> dict[str, Any]:
     snapshot = motion_controller.snapshot()
     with camera_lock:
-        frame = (
-            last_vision_frame
-            if snapshot.app_mode in {"opencv", HAND_GESTURE_MODE} and last_vision_frame is not None
-            else last_frame
-        )
+        frame = choose_camera_frame(snapshot)
         if frame is None:
             return {"ok": False, "available": False, "status": camera_status}
         encoded_frame = base64.b64encode(frame).decode("ascii")
@@ -514,7 +523,7 @@ def camera_frame_response() -> dict[str, Any]:
 
 
 def camera_capture_loop() -> None:
-    global last_frame, last_vision_frame, last_cv_frame, camera_status
+    global last_frame, last_vision_frame, last_vision_frame_at, last_cv_frame, camera_status
 
     while True:
         capture = cv2.VideoCapture(CAMERA_DEVICE)
@@ -523,6 +532,7 @@ def camera_capture_loop() -> None:
                 camera_status = f"Camera unavailable on /dev/video{CAMERA_DEVICE}"
                 last_frame = None
                 last_vision_frame = None
+                last_vision_frame_at = 0.0
                 last_cv_frame = None
             time.sleep(2)
             continue
@@ -540,6 +550,7 @@ def camera_capture_loop() -> None:
                     camera_status = "Camera frame read failed"
                     last_frame = None
                     last_vision_frame = None
+                    last_vision_frame_at = 0.0
                     last_cv_frame = None
                 break
 
@@ -832,12 +843,13 @@ def maybe_issue_gesture_brick_motion(gesture: dict[str, Any]) -> tuple[str, str]
 
 
 def on_gesture_detections(detections: dict[str, Any], frame: bytes | None = None) -> None:
-    global camera_status, last_vision_frame
+    global camera_status, last_vision_frame, last_vision_frame_at
 
     encoded_frame = gesture_detection_frame(frame, detections)
     if encoded_frame is not None:
         with camera_lock:
             last_vision_frame = encoded_frame
+            last_vision_frame_at = time.monotonic()
             if motion_controller.snapshot().app_mode == HAND_GESTURE_MODE:
                 camera_status = "Gesture detection brick preview active"
 
@@ -916,13 +928,14 @@ def setup_gesture_detector() -> Any:
 
 
 def vision_worker_loop() -> None:
-    global last_vision_frame
+    global last_vision_frame, last_vision_frame_at
 
     while True:
         snapshot = motion_controller.snapshot()
         if snapshot.app_mode not in {"opencv", HAND_GESTURE_MODE}:
             with camera_lock:
                 last_vision_frame = None
+                last_vision_frame_at = 0.0
             time.sleep(0.2)
             continue
 
@@ -973,6 +986,7 @@ def vision_worker_loop() -> None:
             if encoded_frame is not None:
                 with camera_lock:
                     last_vision_frame = encoded_frame
+                    last_vision_frame_at = time.monotonic()
 
             with vision_lock:
                 vision_status["opencv"] = (
@@ -1014,11 +1028,7 @@ class MjpegHandler(BaseHTTPRequestHandler):
         while True:
             snapshot = motion_controller.snapshot()
             with camera_lock:
-                frame = (
-                    last_vision_frame
-                    if snapshot.app_mode in {"opencv", HAND_GESTURE_MODE} and last_vision_frame is not None
-                    else last_frame
-                )
+                frame = choose_camera_frame(snapshot)
             if frame is None:
                 time.sleep(0.25)
                 continue

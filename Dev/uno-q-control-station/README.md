@@ -33,6 +33,7 @@ Nueva app independiente para controlar el robot cuadrúpedo UNO Q sin reemplazar
   - La app usa solo las cuatro etiquetas del modelo incluido:
     `five -> stand`, `good -> forward`, `neut -> backward`, `peace -> greeting`.
   - El mismo gesto se dispara una vez, con cooldown de 2.5 segundos, para evitar que un reconocimiento sostenido bloquee el control.
+  - Las cajas anotadas expiran rapido para que el feed vuelva al video vivo si el brick deja de enviar detecciones.
   - Si no detecta mano o la etiqueta no esta mapeada: no manda movimiento.
   - La camara del brick usa `/dev/video0` directo y alimenta tambien el feed de la UI.
   - OpenCV queda reservado solo para el modo de pelota azul.
