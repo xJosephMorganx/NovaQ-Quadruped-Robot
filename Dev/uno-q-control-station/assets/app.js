@@ -177,7 +177,8 @@ function formatHandStatus(hand, fallback = "Reserved") {
     return `${hand.gesture || "none"} -> ${hand.motion || "hold"}`;
   }
   const confidence = Number(hand.confidence || 0).toFixed(2);
-  return `${hand.gesture} -> ${hand.motion} (${confidence})`;
+  const solidity = Number(hand.solidity || 0).toFixed(2);
+  return `${hand.gesture} -> ${hand.motion}, fingers ${hand.fingerCount || 0}, s ${solidity}, c ${confidence}`;
 }
 
 async function setMode(mode, source = "ui") {

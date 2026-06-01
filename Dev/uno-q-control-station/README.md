@@ -27,16 +27,16 @@ Nueva app independiente para controlar el robot cuadrúpedo UNO Q sin reemplazar
   - Si detecta pelota centrada: avanza hacia adelante.
   - Entre movimientos espera 3 segundos sin mandar `stand`, para no revertir el avance o el giro recién hecho.
   - El feed muestra una vista anotada mientras OpenCV está activo.
-- Modo MediaPipe con control por gestos de mano:
+- Modo MediaPipe/Hand con control por OpenCV de mano desnuda:
   - Palma abierta: `stand`.
   - Puño: `initial`.
-  - Índice arriba: `forward`.
-  - Índice + medio: `backward`.
-  - Pulgar a la izquierda: `turn_left`.
-  - Pulgar a la derecha: `turn_right`.
-  - Pulgar + meñique: `greeting`.
+  - Un dedo arriba: `forward`.
+  - Dos dedos: `backward`.
+  - Mano/contorno hacia la izquierda: `turn_left`.
+  - Mano/contorno hacia la derecha: `turn_right`.
+  - Tres dedos: `greeting`.
   - Si no detecta mano o el gesto no es claro: no manda movimiento.
-  - El feed muestra landmarks de la mano mientras MediaPipe está activo.
+  - El feed muestra contorno, hull, puntas estimadas y valles entre dedos mientras el modo está activo.
 - Sketch con PCA9685 en `0x40`, canales `0-7`, `50 Hz`, reutilizando pulsos, poses y gait del prototipo.
 
 ## Arquitectura de movimiento
