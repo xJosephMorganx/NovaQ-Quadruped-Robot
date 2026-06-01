@@ -177,8 +177,9 @@ function formatHandStatus(hand, fallback = "Reserved") {
     return `${hand.gesture || "none"} -> ${hand.motion || "hold"}`;
   }
   const confidence = Number(hand.confidence || 0).toFixed(2);
-  const solidity = Number(hand.solidity || 0).toFixed(2);
-  return `${hand.gesture} -> ${hand.motion}, fingers ${hand.fingerCount || 0}, s ${solidity}, c ${confidence}`;
+  const box = Array.isArray(hand.boundingBox) ? `, box ${hand.boundingBox.join(",")}` : "";
+  const fingers = Number.isFinite(Number(hand.fingerCount)) ? `, fingers ${hand.fingerCount}` : "";
+  return `${hand.gesture} -> ${hand.motion}${fingers}, c ${confidence}${box}`;
 }
 
 async function setMode(mode, source = "ui") {

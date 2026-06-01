@@ -18,6 +18,17 @@ import cv2
 from arduino.app_utils import App, Bridge
 from arduino.app_bricks.web_ui import WebUI
 
+try:
+    from arduino.app_bricks.video_objectdetection import VideoObjectDetection
+    from arduino.app_utils.image import draw_bounding_boxes, get_image_bytes
+except Exception as import_error:  # pragma: no cover - depends on App Lab brick runtime
+    VideoObjectDetection = None
+    draw_bounding_boxes = None
+    get_image_bytes = None
+    VIDEO_OBJECT_DETECTION_IMPORT_ERROR = import_error
+else:
+    VIDEO_OBJECT_DETECTION_IMPORT_ERROR = None
+
 
 APP_DIR = Path(__file__).resolve().parent.parent
 CAMERA_DEVICE = 0
@@ -58,6 +69,41 @@ MODE_TO_LEGACY_MOTION = {
     "turn_right": "turn_right_step",
 }
 LEGACY_MOTION_TO_MODE = {legacy: mode for mode, legacy in MODE_TO_LEGACY_MOTION.items()}
+GESTURE_LABEL_TO_MOTION = {
+    "open_palm": "stand",
+    "open_hand": "stand",
+    "palm": "stand",
+    "five": "stand",
+    "stop": "stand",
+    "stand": "stand",
+    "fist": "initial",
+    "closed_fist": "initial",
+    "closed_hand": "initial",
+    "initial": "initial",
+    "one": "forward",
+    "one_finger": "forward",
+    "index": "forward",
+    "point_up": "forward",
+    "up": "forward",
+    "forward": "forward",
+    "thumbs_up": "forward",
+    "two": "backward",
+    "two_fingers": "backward",
+    "peace": "backward",
+    "v_sign": "backward",
+    "down": "backward",
+    "backward": "backward",
+    "left": "turn_left",
+    "point_left": "turn_left",
+    "turn_left": "turn_left",
+    "right": "turn_right",
+    "point_right": "turn_right",
+    "turn_right": "turn_right",
+    "three": "greeting",
+    "three_fingers": "greeting",
+    "wave": "greeting",
+    "greeting": "greeting",
+}
 
 POSE_TABLE = [
     {"name": "Shoulder_FL", "channel": 0, "initial": 170, "stand": 280, "greeting": "235-300"},
@@ -421,6 +467,14 @@ def camera_capture_loop() -> None:
     global last_frame, last_vision_frame, last_cv_frame, camera_status
 
     while True:
+        if motion_controller.snapshot().app_mode == "mediapipe":
+            with camera_lock:
+                camera_status = "Camera reserved for gesture detection brick"
+                last_frame = None
+                last_cv_frame = None
+            time.sleep(1)
+            continue
+
         capture = cv2.VideoCapture(CAMERA_DEVICE)
         if not capture.isOpened():
             with camera_lock:
@@ -438,6 +492,13 @@ def camera_capture_loop() -> None:
             camera_status = "Camera connected"
 
         while capture.isOpened():
+            if motion_controller.snapshot().app_mode == "mediapipe":
+                with camera_lock:
+                    camera_status = "Camera reserved for gesture detection brick"
+                    last_frame = None
+                    last_cv_frame = None
+                break
+
             success, frame = capture.read()
             if not success:
                 with camera_lock:
@@ -867,6 +928,140 @@ def process_hand_frame(frame: Any) -> tuple[bytes | None, dict[str, Any]]:
     return encoded_frame, hand_info
 
 
+def normalize_gesture_label(label: str) -> str:
+    return label.strip().lower().replace(" ", "_").replace("-", "_")
+
+
+def best_gesture_detection(detections: dict[str, Any]) -> dict[str, Any] | None:
+    best: dict[str, Any] | None = None
+    for label, entries in detections.items():
+        normalized_label = normalize_gesture_label(str(label))
+        if isinstance(entries, dict):
+            entries = [entries]
+        if not isinstance(entries, list):
+            entries = [{"confidence": entries}]
+
+        for entry in entries:
+            if not isinstance(entry, dict):
+                entry = {"confidence": entry}
+            confidence = float(entry.get("confidence", 0) or 0)
+            candidate = {
+                "label": str(label),
+                "normalizedLabel": normalized_label,
+                "confidence": confidence,
+                "motion": GESTURE_LABEL_TO_MOTION.get(normalized_label, "hold"),
+                "boundingBox": entry.get("bounding_box_xyxy"),
+            }
+            if best is None or candidate["confidence"] > best["confidence"]:
+                best = candidate
+    return best
+
+
+def gesture_detection_frame(frame: bytes | None, detections: dict[str, Any]) -> bytes | None:
+    if frame is None:
+        return None
+    if draw_bounding_boxes is None or get_image_bytes is None:
+        return frame
+    try:
+        return get_image_bytes(draw_bounding_boxes(frame, detections))
+    except Exception:
+        logger.exception("Failed to annotate gesture detection frame")
+        return frame
+
+
+def is_gesture_stable(label: str) -> bool:
+    with hand_lock:
+        if hand_state["last_gesture"] == label:
+            hand_state["stable_gesture_count"] += 1
+        else:
+            hand_state["last_gesture"] = label
+            hand_state["stable_gesture_count"] = 1
+        return hand_state["stable_gesture_count"] >= HAND_STABLE_GESTURES_REQUIRED
+
+
+def maybe_issue_gesture_brick_motion(gesture: dict[str, Any]) -> tuple[str, str]:
+    label = gesture["normalizedLabel"]
+    motion = gesture["motion"]
+    if motion == "hold":
+        return label, "hold"
+
+    if not is_gesture_stable(label):
+        return "confirming", "hold"
+
+    now = time.monotonic()
+    with hand_lock:
+        elapsed = now - float(hand_state["last_motion_at"])
+        if elapsed < HAND_ACTION_COOLDOWN_SECONDS:
+            return "cooldown", "hold"
+        hand_state["last_motion_at"] = now
+
+    motion_controller.set_autonomous_motion("mediapipe", motion, f"Gesture brick {label}: {motion}", force=True)
+    return label, motion
+
+
+def on_gesture_detections(detections: dict[str, Any], frame: bytes | None = None) -> None:
+    global camera_status, last_vision_frame
+
+    encoded_frame = gesture_detection_frame(frame, detections)
+    if encoded_frame is not None:
+        with camera_lock:
+            last_vision_frame = encoded_frame
+            if motion_controller.snapshot().app_mode == "mediapipe":
+                camera_status = "Gesture detection brick preview active"
+
+    best_detection = best_gesture_detection(detections)
+    if best_detection is None:
+        with vision_lock:
+            vision_status["mediapipe"] = "Gesture brick active: no hand gesture"
+            vision_status["hand"] = {
+                "detected": False,
+                "gesture": "none",
+                "motion": "hold",
+                "confidence": 0,
+            }
+        return
+
+    snapshot = motion_controller.snapshot()
+    gesture_label = best_detection["normalizedLabel"]
+    motion = best_detection["motion"]
+    action = gesture_label
+    if snapshot.app_mode != "mediapipe":
+        motion = "hold"
+    else:
+        action, motion = maybe_issue_gesture_brick_motion(best_detection)
+
+    with vision_lock:
+        vision_status["mediapipe"] = f"Gesture brick {action}: {motion}"
+        vision_status["hand"] = {
+            "detected": True,
+            "gesture": gesture_label,
+            "motion": motion,
+            "confidence": round(float(best_detection["confidence"]), 3),
+            "boundingBox": best_detection["boundingBox"],
+        }
+
+
+def setup_gesture_detector() -> Any:
+    if VideoObjectDetection is None:
+        error = f"Gesture brick unavailable: {VIDEO_OBJECT_DETECTION_IMPORT_ERROR}"
+        logger.warning(error)
+        with vision_lock:
+            vision_status["mediapipe"] = error
+        return None
+
+    try:
+        detector = VideoObjectDetection(confidence=0.45, debounce_sec=0.25, camera_preview=True)
+        detector.on_detect_all(on_gesture_detections)
+        with vision_lock:
+            vision_status["mediapipe"] = "Gesture brick ready: waiting for hand"
+        return detector
+    except Exception as error:
+        logger.exception("Failed to initialize gesture detection brick")
+        with vision_lock:
+            vision_status["mediapipe"] = f"Gesture brick init failed: {error}"
+        return None
+
+
 def vision_worker_loop() -> None:
     global last_vision_frame
 
@@ -875,6 +1070,13 @@ def vision_worker_loop() -> None:
         if snapshot.app_mode not in {"opencv", "mediapipe"}:
             with camera_lock:
                 last_vision_frame = None
+            time.sleep(0.2)
+            continue
+
+        if snapshot.app_mode == "mediapipe":
+            with vision_lock:
+                if vision_status["mediapipe"].startswith("Idle"):
+                    vision_status["mediapipe"] = "Gesture brick active: waiting for hand"
             time.sleep(0.2)
             continue
 
@@ -895,8 +1097,6 @@ def vision_worker_loop() -> None:
                         "offset": None,
                         "maskArea": 0,
                     }
-                if snapshot.app_mode == "mediapipe":
-                    vision_status["mediapipe"] = "Active: waiting for camera frame"
             time.sleep(VISION_FRAME_INTERVAL_SECONDS)
             continue
 
@@ -927,23 +1127,6 @@ def vision_worker_loop() -> None:
                     "circularity": detection["circularity"],
                     "fillRatio": detection["fillRatio"],
                     "rejectReason": detection["rejectReason"],
-                }
-
-        if snapshot.app_mode == "mediapipe":
-            encoded_frame, hand_status = process_hand_frame(frame)
-            if encoded_frame is not None:
-                with camera_lock:
-                    last_vision_frame = encoded_frame
-            with vision_lock:
-                vision_status["mediapipe"] = hand_status["status"]
-                vision_status["hand"] = {
-                    "detected": hand_status["detected"],
-                    "gesture": hand_status["gesture"],
-                    "motion": hand_status["motion"],
-                    "confidence": hand_status["confidence"],
-                    "fingerCount": hand_status.get("fingerCount", 0),
-                    "defectCount": hand_status.get("defectCount", 0),
-                    "solidity": hand_status.get("solidity", 0),
                 }
 
         time.sleep(VISION_FRAME_INTERVAL_SECONDS)
@@ -995,6 +1178,7 @@ def start_mjpeg_server() -> None:
     server.serve_forever()
 
 
+gesture_detector = setup_gesture_detector()
 threading.Thread(target=camera_capture_loop, daemon=True).start()
 threading.Thread(target=vision_worker_loop, daemon=True).start()
 threading.Thread(target=start_mjpeg_server, daemon=True).start()
