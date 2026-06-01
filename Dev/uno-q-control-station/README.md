@@ -25,7 +25,7 @@ Nueva app independiente para controlar el robot cuadrúpedo UNO Q sin reemplazar
   - Si no detecta pelota: búsqueda con ráfaga de tres giros a la derecha.
   - Si detecta pelota fuera del centro: corrige con giro izquierdo/derecho.
   - Si detecta pelota centrada: avanza hacia adelante.
-  - Entre movimientos espera 3 segundos sin mandar `stand`, para no revertir el avance o el giro recién hecho.
+  - Entre movimientos espera 1.5 segundos sin mandar `stand`, para no revertir el avance o el giro recién hecho.
   - El feed muestra una vista anotada mientras OpenCV está activo.
 - Modo Hand Gesture usando solo el brick `arduino:video_object_detection`:
   - Usa un modelo Edge Impulse en `/home/arduino/.arduino-bricks/ei-models/hand_gesture.eim`.
