@@ -4,6 +4,7 @@ import base64
 import json
 import logging
 import math
+import os
 import threading
 import time
 from dataclasses import dataclass
@@ -37,6 +38,7 @@ MJPEG_PORT = 7001
 VISION_FRAME_INTERVAL_SECONDS = 0.06
 OPENCV_STEP_COOLDOWN_SECONDS = 3.0
 OPENCV_SEARCH_BURST_STEPS = 3
+ENABLE_GESTURE_BRICK = os.environ.get("UNO_Q_ENABLE_GESTURE_BRICK", "").strip().lower() in {"1", "true", "yes"}
 HAND_ACTION_COOLDOWN_SECONDS = 1.0
 HAND_STABLE_GESTURES_REQUIRED = 3
 HAND_MIN_AREA_RATIO = 0.025
@@ -1042,6 +1044,11 @@ def on_gesture_detections(detections: dict[str, Any], frame: bytes | None = None
 
 
 def setup_gesture_detector() -> Any:
+    if not ENABLE_GESTURE_BRICK:
+        with vision_lock:
+            vision_status["mediapipe"] = "Gesture brick disabled: web startup protected"
+        return None
+
     if VideoObjectDetection is None:
         error = f"Gesture brick unavailable: {VIDEO_OBJECT_DETECTION_IMPORT_ERROR}"
         logger.warning(error)

@@ -33,6 +33,7 @@ Nueva app independiente para controlar el robot cuadrúpedo UNO Q sin reemplazar
   - La app mapea etiquetas comunes (`open_palm`, `fist`, `one`, `two`, `left`, `right`, `wave`) a movimientos del robot.
   - Si no detecta mano o la etiqueta no esta mapeada: no manda movimiento.
   - En modo de gestos, la camara se reserva para el brick para evitar que OpenCV y Edge Impulse compitan por `/dev/video0`.
+  - Por seguridad de arranque, el brick queda desactivado por defecto. Para probarlo, reactivar el bloque de `app.yaml` y arrancar Python con `UNO_Q_ENABLE_GESTURE_BRICK=1`.
 - Sketch con PCA9685 en `0x40`, canales `0-7`, `50 Hz`, reutilizando pulsos, poses y gait del prototipo.
 
 ## Arquitectura de movimiento
