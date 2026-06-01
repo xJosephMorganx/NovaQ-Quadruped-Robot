@@ -25,7 +25,7 @@ Nueva app independiente para controlar el robot cuadrúpedo UNO Q sin reemplazar
   - Si no detecta pelota: búsqueda con ráfaga de tres giros a la derecha.
   - Si detecta pelota fuera del centro: corrige con giro izquierdo/derecho.
   - Si detecta pelota centrada: avanza hacia adelante.
-  - Entre movimientos espera sin mandar `stand`, para no revertir el avance o el giro recién hecho.
+  - Entre movimientos espera 3 segundos sin mandar `stand`, para no revertir el avance o el giro recién hecho.
   - El feed muestra una vista anotada mientras OpenCV está activo.
 - Modo MediaPipe reservado para control por mano.
 - Sketch con PCA9685 en `0x40`, canales `0-7`, `50 Hz`, reutilizando pulsos, poses y gait del prototipo.
