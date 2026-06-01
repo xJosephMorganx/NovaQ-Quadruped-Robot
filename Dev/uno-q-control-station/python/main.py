@@ -48,11 +48,12 @@ BLUE_HSV_LOWER = (98, 105, 55)
 BLUE_HSV_UPPER = (135, 255, 255)
 BLUE_MIN_MASK_AREA = 380
 BLUE_MIN_RADIUS = 12
-BLUE_MAX_RADIUS_RATIO = 0.32
+BLUE_MAX_RADIUS_RATIO = 0.38
+BLUE_CLOSE_RADIUS_RATIO = 0.24
 BLUE_MIN_CIRCULARITY = 0.72
 BLUE_MIN_FILL_RATIO = 0.50
 BLUE_MAX_FILL_RATIO = 1.18
-BLUE_CENTER_DEADZONE_RATIO = 0.24
+BLUE_CENTER_DEADZONE_RATIO = 0.32
 BLUE_STABLE_DETECTIONS_REQUIRED = 2
 
 HAND_GESTURE_MODE = "hand_gesture"
@@ -667,6 +668,10 @@ def detect_blue_ball(frame: Any) -> dict[str, Any]:
 def choose_blue_ball_motion(detection: dict[str, Any]) -> tuple[str, str]:
     if not detection["detected"]:
         return "search", "turn_right"
+
+    close_radius = int(min(int(detection["frameWidth"]), int(detection["frameHeight"])) * BLUE_CLOSE_RADIUS_RATIO)
+    if int(detection["radius"]) >= close_radius:
+        return "close_stop", "hold"
 
     offset = float(detection["offset"])
     if offset < -BLUE_CENTER_DEADZONE_RATIO:
