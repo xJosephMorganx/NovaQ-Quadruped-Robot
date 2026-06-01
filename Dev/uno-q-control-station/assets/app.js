@@ -145,7 +145,7 @@ async function loadState() {
     elements.cameraStatus.textContent = data.camera?.status || "Camera status unknown";
     elements.opencvStatus.textContent = data.vision?.opencv || "Reserved";
     elements.blueBallStatus.textContent = formatBlueBallStatus(data.vision?.blueBall);
-    elements.mediapipeStatus.textContent = data.vision?.mediapipe || "Reserved";
+    elements.mediapipeStatus.textContent = formatHandStatus(data.vision?.hand, data.vision?.mediapipe);
     applyMotionState(data.motion);
     renderPoseTable();
     setConnectionStatus("Connected", "status-success");
@@ -167,6 +167,17 @@ function formatBlueBallStatus(blueBall) {
   const circularity = Number(blueBall.circularity || 0).toFixed(2);
   const fill = Number(blueBall.fillRatio || 0).toFixed(2);
   return `x ${blueBall.x}, r ${blueBall.radius}, off ${offset}, c ${circularity}, f ${fill} -> ${blueBall.motion}`;
+}
+
+function formatHandStatus(hand, fallback = "Reserved") {
+  if (!hand) {
+    return fallback;
+  }
+  if (!hand.detected) {
+    return `${hand.gesture || "none"} -> ${hand.motion || "hold"}`;
+  }
+  const confidence = Number(hand.confidence || 0).toFixed(2);
+  return `${hand.gesture} -> ${hand.motion} (${confidence})`;
 }
 
 async function setMode(mode, source = "ui") {

@@ -14,6 +14,10 @@ from typing import Any
 from urllib.parse import parse_qs, urlparse
 
 import cv2
+try:
+    import mediapipe as mp
+except Exception:
+    mp = None
 
 from arduino.app_utils import App, Bridge
 from arduino.app_bricks.web_ui import WebUI
@@ -26,6 +30,8 @@ MJPEG_PORT = 7001
 VISION_FRAME_INTERVAL_SECONDS = 0.06
 OPENCV_STEP_COOLDOWN_SECONDS = 3.0
 OPENCV_SEARCH_BURST_STEPS = 3
+MEDIAPIPE_ACTION_COOLDOWN_SECONDS = 1.0
+MEDIAPIPE_STABLE_GESTURES_REQUIRED = 2
 BLUE_HSV_LOWER = (98, 105, 55)
 BLUE_HSV_UPPER = (135, 255, 255)
 BLUE_MIN_MASK_AREA = 380
@@ -157,7 +163,11 @@ class MotionController:
             with self._lock:
                 self._generation += 1
                 self._app_mode = normalized_mode
-                self._desired_motion = "stand"
+                if normalized_mode == "manual":
+                    self._desired_motion = "stand"
+                else:
+                    self._desired_motion = self._current_motion
+                    self._executed_generation = self._generation
                 generation = self._generation
                 self._last_result = f"{normalized_mode} mode selected"
                 self._last_error = None
@@ -303,7 +313,7 @@ motion_controller = MotionController()
 
 vision_status = {
     "opencv": "Idle: blue ball tracking ready",
-    "mediapipe": "Idle: hand controller reserved",
+    "mediapipe": "Idle: hand controller ready",
     "blueBall": {
         "detected": False,
         "action": "idle",
@@ -314,6 +324,12 @@ vision_status = {
         "offset": None,
         "maskArea": 0,
     },
+    "hand": {
+        "detected": False,
+        "gesture": "none",
+        "motion": "hold",
+        "confidence": 0,
+    },
 }
 vision_lock = threading.Lock()
 opencv_state = {
@@ -323,6 +339,13 @@ opencv_state = {
     "search_burst_remaining": 0,
 }
 opencv_lock = threading.Lock()
+mediapipe_state = {
+    "hands": None,
+    "last_gesture": None,
+    "stable_gesture_count": 0,
+    "last_motion_at": 0.0,
+}
+mediapipe_lock = threading.Lock()
 
 
 def state_response() -> dict[str, Any]:
@@ -335,6 +358,7 @@ def state_response() -> dict[str, Any]:
             "opencv": vision_status["opencv"],
             "mediapipe": vision_status["mediapipe"],
             "blueBall": dict(vision_status["blueBall"]),
+            "hand": dict(vision_status["hand"]),
         }
 
     return {
@@ -380,7 +404,7 @@ def mode_path_response(mode: str) -> dict[str, Any]:
 def camera_frame_response() -> dict[str, Any]:
     snapshot = motion_controller.snapshot()
     with camera_lock:
-        frame = last_vision_frame if snapshot.app_mode == "opencv" and last_vision_frame is not None else last_frame
+        frame = last_vision_frame if snapshot.app_mode in {"opencv", "mediapipe"} and last_vision_frame is not None else last_frame
         if frame is None:
             return {"ok": False, "available": False, "status": camera_status}
         encoded_frame = base64.b64encode(frame).decode("ascii")
@@ -636,6 +660,184 @@ def encode_vision_frame(frame: Any, detection: dict[str, Any], action: str, moti
     return jpeg.tobytes()
 
 
+def get_mediapipe_hands() -> Any:
+    if mp is None:
+        return None
+
+    with mediapipe_lock:
+        if mediapipe_state["hands"] is None:
+            mediapipe_state["hands"] = mp.solutions.hands.Hands(
+                static_image_mode=False,
+                max_num_hands=1,
+                model_complexity=0,
+                min_detection_confidence=0.65,
+                min_tracking_confidence=0.55,
+            )
+        return mediapipe_state["hands"]
+
+
+def landmark_distance(first: Any, second: Any) -> float:
+    return math.hypot(first.x - second.x, first.y - second.y)
+
+
+def classify_hand_gesture(hand_landmarks: Any) -> dict[str, Any]:
+    landmarks = hand_landmarks.landmark
+    wrist = landmarks[0]
+    thumb_tip = landmarks[4]
+    thumb_ip = landmarks[3]
+    index_tip = landmarks[8]
+    index_pip = landmarks[6]
+    middle_tip = landmarks[12]
+    middle_pip = landmarks[10]
+    ring_tip = landmarks[16]
+    ring_pip = landmarks[14]
+    pinky_tip = landmarks[20]
+    pinky_pip = landmarks[18]
+
+    fingers = {
+        "thumb": landmark_distance(thumb_tip, wrist) > landmark_distance(thumb_ip, wrist) + 0.04
+        and abs(thumb_tip.x - thumb_ip.x) > 0.035,
+        "index": index_tip.y < index_pip.y - 0.025,
+        "middle": middle_tip.y < middle_pip.y - 0.025,
+        "ring": ring_tip.y < ring_pip.y - 0.025,
+        "pinky": pinky_tip.y < pinky_pip.y - 0.025,
+    }
+    non_thumb_count = sum(1 for name in ("index", "middle", "ring", "pinky") if fingers[name])
+    extended_count = non_thumb_count + (1 if fingers["thumb"] else 0)
+
+    result = {
+        "gesture": "unknown",
+        "motion": "hold",
+        "confidence": 0.55,
+        "fingers": fingers,
+    }
+
+    if extended_count >= 4:
+        result.update({"gesture": "open_palm", "motion": "stand", "confidence": 0.86})
+        return result
+
+    if extended_count == 0:
+        result.update({"gesture": "fist", "motion": "initial", "confidence": 0.82})
+        return result
+
+    if fingers["thumb"] and fingers["pinky"] and not any(fingers[name] for name in ("index", "middle", "ring")):
+        result.update({"gesture": "shaka", "motion": "greeting", "confidence": 0.84})
+        return result
+
+    if fingers["thumb"] and non_thumb_count == 0:
+        if thumb_tip.x < wrist.x - 0.08:
+            result.update({"gesture": "thumb_left", "motion": "turn_left", "confidence": 0.8})
+            return result
+        if thumb_tip.x > wrist.x + 0.08:
+            result.update({"gesture": "thumb_right", "motion": "turn_right", "confidence": 0.8})
+            return result
+
+    if fingers["index"] and not any(fingers[name] for name in ("middle", "ring", "pinky", "thumb")):
+        result.update({"gesture": "index_up", "motion": "forward", "confidence": 0.82})
+        return result
+
+    if fingers["index"] and fingers["middle"] and not fingers["ring"] and not fingers["pinky"] and not fingers["thumb"]:
+        result.update({"gesture": "peace", "motion": "backward", "confidence": 0.82})
+        return result
+
+    return result
+
+
+def is_mediapipe_gesture_stable(gesture: str) -> bool:
+    with mediapipe_lock:
+        if mediapipe_state["last_gesture"] == gesture:
+            mediapipe_state["stable_gesture_count"] += 1
+        else:
+            mediapipe_state["last_gesture"] = gesture
+            mediapipe_state["stable_gesture_count"] = 1
+        return mediapipe_state["stable_gesture_count"] >= MEDIAPIPE_STABLE_GESTURES_REQUIRED
+
+
+def maybe_issue_mediapipe_motion(gesture_info: dict[str, Any]) -> tuple[str, str]:
+    gesture = gesture_info["gesture"]
+    motion = gesture_info["motion"]
+    if motion == "hold" or gesture == "unknown":
+        return gesture, "hold"
+
+    if not is_mediapipe_gesture_stable(gesture):
+        return "confirming", "hold"
+
+    now = time.monotonic()
+    with mediapipe_lock:
+        elapsed = now - float(mediapipe_state["last_motion_at"])
+        if elapsed < MEDIAPIPE_ACTION_COOLDOWN_SECONDS:
+            return "cooldown", "hold"
+        mediapipe_state["last_motion_at"] = now
+
+    motion_controller.set_autonomous_motion("mediapipe", motion, f"MediaPipe gesture {gesture}: {motion}", force=True)
+    return gesture, motion
+
+
+def encode_mediapipe_frame(frame: Any, results: Any, gesture: str, motion: str) -> bytes | None:
+    annotated = frame.copy()
+    if mp is not None and results and results.multi_hand_landmarks:
+        drawing_utils = mp.solutions.drawing_utils
+        drawing_styles = mp.solutions.drawing_styles
+        for hand_landmarks in results.multi_hand_landmarks:
+            drawing_utils.draw_landmarks(
+                annotated,
+                hand_landmarks,
+                mp.solutions.hands.HAND_CONNECTIONS,
+                drawing_styles.get_default_hand_landmarks_style(),
+                drawing_styles.get_default_hand_connections_style(),
+            )
+
+    height, width = annotated.shape[:2]
+    label = f"MediaPipe hand: {gesture} -> {motion}"
+    cv2.rectangle(annotated, (8, height - 42), (min(width - 8, 500), height - 8), (0, 0, 0), -1)
+    cv2.putText(annotated, label, (18, height - 19), cv2.FONT_HERSHEY_SIMPLEX, 0.62, (255, 255, 255), 2)
+
+    success, jpeg = cv2.imencode(".jpg", annotated, [int(cv2.IMWRITE_JPEG_QUALITY), 82])
+    if not success:
+        return None
+    return jpeg.tobytes()
+
+
+def process_mediapipe_frame(frame: Any) -> tuple[bytes | None, dict[str, Any]]:
+    hands = get_mediapipe_hands()
+    if hands is None:
+        return None, {
+            "detected": False,
+            "gesture": "unavailable",
+            "motion": "hold",
+            "confidence": 0,
+            "status": "MediaPipe package is not installed",
+        }
+
+    rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+    rgb_frame.flags.writeable = False
+    results = hands.process(rgb_frame)
+
+    if not results.multi_hand_landmarks:
+        with mediapipe_lock:
+            mediapipe_state["last_gesture"] = None
+            mediapipe_state["stable_gesture_count"] = 0
+        encoded_frame = encode_mediapipe_frame(frame, results, "no_hand", "hold")
+        return encoded_frame, {
+            "detected": False,
+            "gesture": "none",
+            "motion": "hold",
+            "confidence": 0,
+            "status": "No hand detected",
+        }
+
+    gesture_info = classify_hand_gesture(results.multi_hand_landmarks[0])
+    gesture, motion = maybe_issue_mediapipe_motion(gesture_info)
+    encoded_frame = encode_mediapipe_frame(frame, results, gesture, motion)
+    return encoded_frame, {
+        "detected": True,
+        "gesture": gesture,
+        "motion": motion,
+        "confidence": gesture_info["confidence"],
+        "status": f"Gesture {gesture}: {motion}",
+    }
+
+
 def vision_worker_loop() -> None:
     global last_vision_frame
 
@@ -699,8 +901,18 @@ def vision_worker_loop() -> None:
                 }
 
         if snapshot.app_mode == "mediapipe":
+            encoded_frame, hand_status = process_mediapipe_frame(frame)
+            if encoded_frame is not None:
+                with camera_lock:
+                    last_vision_frame = encoded_frame
             with vision_lock:
-                vision_status["mediapipe"] = "Active: waiting for hand controller implementation"
+                vision_status["mediapipe"] = hand_status["status"]
+                vision_status["hand"] = {
+                    "detected": hand_status["detected"],
+                    "gesture": hand_status["gesture"],
+                    "motion": hand_status["motion"],
+                    "confidence": hand_status["confidence"],
+                }
 
         time.sleep(VISION_FRAME_INTERVAL_SECONDS)
 
@@ -722,7 +934,7 @@ class MjpegHandler(BaseHTTPRequestHandler):
         while True:
             snapshot = motion_controller.snapshot()
             with camera_lock:
-                frame = last_vision_frame if snapshot.app_mode == "opencv" and last_vision_frame is not None else last_frame
+                frame = last_vision_frame if snapshot.app_mode in {"opencv", "mediapipe"} and last_vision_frame is not None else last_frame
             if frame is None:
                 time.sleep(0.25)
                 continue
