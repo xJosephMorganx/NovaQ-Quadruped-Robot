@@ -22,7 +22,7 @@ Nueva app independiente para controlar el robot cuadrúpedo UNO Q sin reemplazar
 - Modo OpenCV con tracking básico de pelota azul:
   - Máscara HSV azul.
   - Detector estricto por contorno circular: radio máximo, circularidad y densidad de relleno.
-  - Si no detecta pelota: búsqueda girando a la derecha.
+  - Si no detecta pelota: búsqueda con ráfaga de tres giros a la derecha.
   - Si detecta pelota fuera del centro: corrige con giro izquierdo/derecho.
   - Si detecta pelota centrada: avanza hacia adelante.
   - Entre movimientos vuelve a `stand` y espera para estabilizar la imagen.

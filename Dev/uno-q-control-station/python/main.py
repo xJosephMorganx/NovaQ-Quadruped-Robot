@@ -26,6 +26,7 @@ MJPEG_PORT = 7001
 VISION_FRAME_INTERVAL_SECONDS = 0.06
 OPENCV_STEP_COOLDOWN_SECONDS = 0.65
 OPENCV_STAND_SETTLE_SECONDS = 0.25
+OPENCV_SEARCH_BURST_STEPS = 3
 BLUE_HSV_LOWER = (98, 105, 55)
 BLUE_HSV_UPPER = (135, 255, 255)
 BLUE_MIN_MASK_AREA = 380
@@ -34,7 +35,7 @@ BLUE_MAX_RADIUS_RATIO = 0.32
 BLUE_MIN_CIRCULARITY = 0.72
 BLUE_MIN_FILL_RATIO = 0.50
 BLUE_MAX_FILL_RATIO = 1.18
-BLUE_CENTER_DEADZONE_RATIO = 0.14
+BLUE_CENTER_DEADZONE_RATIO = 0.24
 BLUE_STABLE_DETECTIONS_REQUIRED = 2
 
 CONTROL_MODES = {"manual", "opencv", "mediapipe"}
@@ -313,6 +314,7 @@ opencv_state = {
     "last_motion_at": 0.0,
     "last_detection_key": None,
     "stable_detection_count": 0,
+    "search_burst_remaining": 0,
 }
 opencv_lock = threading.Lock()
 
@@ -563,6 +565,11 @@ def is_detection_stable(detection: dict[str, Any], action: str) -> bool:
         return opencv_state["stable_detection_count"] >= BLUE_STABLE_DETECTIONS_REQUIRED
 
 
+def reset_search_burst() -> None:
+    with opencv_lock:
+        opencv_state["search_burst_remaining"] = 0
+
+
 def maybe_issue_opencv_motion(action: str, motion: str, detection: dict[str, Any]) -> tuple[str, str]:
     now = time.monotonic()
     with opencv_lock:
@@ -570,6 +577,22 @@ def maybe_issue_opencv_motion(action: str, motion: str, detection: dict[str, Any
         if elapsed < OPENCV_STEP_COOLDOWN_SECONDS:
             motion_controller.set_autonomous_motion("opencv", "stand", "OpenCV settling image after movement")
             return "settling", "stand"
+
+    if action == "search":
+        with opencv_lock:
+            if opencv_state["search_burst_remaining"] <= 0:
+                opencv_state["search_burst_remaining"] = OPENCV_SEARCH_BURST_STEPS
+            opencv_state["search_burst_remaining"] -= 1
+            burst_remaining = opencv_state["search_burst_remaining"]
+
+        motion_controller.set_autonomous_motion("opencv", motion, f"OpenCV search burst: {motion}")
+        with opencv_lock:
+            opencv_state["last_motion_at"] = now
+        if burst_remaining > 0:
+            return f"search_burst_{burst_remaining + 1}", motion
+        return "search_pause", motion
+
+    reset_search_burst()
 
     if detection["detected"] and not is_detection_stable(detection, action):
         motion_controller.set_autonomous_motion("opencv", "stand", "OpenCV confirming stable ball detection")
