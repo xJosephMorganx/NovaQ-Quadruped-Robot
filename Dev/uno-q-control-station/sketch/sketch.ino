@@ -372,6 +372,49 @@ String runMotion(String motionName) {
   return "error: unknown motion";
 }
 
+String runModeStep(String modeName) {
+  modeName.trim();
+  modeName.toLowerCase();
+  modeName.replace("-", "_");
+
+  if (modeName == "initial") {
+    moveInitial();
+    return "ok: initial";
+  }
+
+  if (modeName == "stand") {
+    moveStand();
+    return "ok: stand";
+  }
+
+  if (modeName == "greeting") {
+    moveGreeting();
+    return "ok: greeting";
+  }
+
+  if (modeName == "forward") {
+    moveForwardStep();
+    return "ok: forward";
+  }
+
+  if (modeName == "backward") {
+    moveBackwardStep();
+    return "ok: backward";
+  }
+
+  if (modeName == "turn_left") {
+    moveTurnLeftStep();
+    return "ok: turn_left";
+  }
+
+  if (modeName == "turn_right") {
+    moveTurnRightStep();
+    return "ok: turn_right";
+  }
+
+  return "error: unknown mode";
+}
+
 void setup() {
   Bridge.begin();
   Monitor.begin();
@@ -383,8 +426,9 @@ void setup() {
 
   Bridge.provide_safe("set_servo_pulse", setServoPulse);
   Bridge.provide_safe("run_motion", runMotion);
+  Bridge.provide_safe("run_mode_step", runModeStep);
 
-  Monitor.println("UNO Q keyboard motion ready");
+  Monitor.println("UNO Q control station ready");
 }
 
 void loop() {

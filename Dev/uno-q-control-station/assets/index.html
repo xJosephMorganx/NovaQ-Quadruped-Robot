@@ -3,82 +3,106 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>UNO Q Keyboard Motion</title>
+    <title>UNO Q Control Station</title>
     <link rel="stylesheet" href="/styles.css" />
   </head>
   <body>
     <main class="app-shell">
       <header class="top-bar">
         <div>
-          <h1>UNO Q Keyboard Motion</h1>
-          <p>Live camera feed and keyboard-triggered robot poses.</p>
+          <h1>UNO Q Control Station</h1>
+          <p>Live camera, manual drive modes, and reserved vision controllers.</p>
         </div>
         <div class="status-group" aria-live="polite">
           <span id="connectionStatus" class="status-pill status-warning">Connecting</span>
-          <span id="lastMotion" class="status-pill">Motion: none</span>
+          <span id="appMode" class="status-pill">Mode: manual</span>
+          <span id="desiredMotion" class="status-pill">Desired: stand</span>
+          <span id="currentMotion" class="status-pill">Current: none</span>
           <button id="focusModeButton" class="button secondary-button" type="button">Focus View</button>
         </div>
       </header>
 
-      <section class="workspace" aria-label="Robot motion workspace">
-        <section class="control-panel" aria-label="Motion controls">
+      <section class="workspace" aria-label="Robot control workspace">
+        <section class="control-panel" aria-label="Mode controls">
           <div class="panel-header">
             <div>
-              <h2>Motion Controls</h2>
-              <p id="motionHint">Use arrows for poses, W/S for gait, and A/D for turns.</p>
+              <h2>Manual Control</h2>
+              <p id="motionHint">Use W/S/A/D as held modes, arrows for poses, Space/PageDown/F4 for controllers.</p>
             </div>
           </div>
 
+          <div class="mode-strip" aria-label="Control mode selector">
+            <button class="chip-button is-active" type="button" data-mode="manual">Manual</button>
+            <button class="chip-button" type="button" data-mode="opencv">OpenCV</button>
+            <button class="chip-button" type="button" data-mode="mediapipe">MediaPipe</button>
+          </div>
+
           <div class="motion-grid">
-            <button id="initialButton" class="motion-button" type="button" data-motion="initial">
+            <button class="motion-button" type="button" data-mode="initial">
               <span class="keycap">DOWN</span>
               <span>
                 <strong>Initial</strong>
-                <small>Arrow Down: arms vertical up, then shoulders 90</small>
+                <small>Arrow Down</small>
               </span>
             </button>
 
-            <button id="standButton" class="motion-button" type="button" data-motion="stand">
+            <button class="motion-button" type="button" data-mode="stand">
               <span class="keycap">UP</span>
               <span>
-              <strong>Stand</strong>
-              <small>Arrow Up: shoulders midpoint, then arms vertical down</small>
-            </span>
-          </button>
-
-            <button id="greetingButton" class="motion-button" type="button" data-motion="greeting">
-              <span class="keycap">RIGHT</span>
-              <span>
-                <strong>Hi</strong>
-                <small>Arrow Right: short FL wave, then back to stand</small>
+                <strong>Stand</strong>
+                <small>Arrow Up or release drive keys</small>
               </span>
             </button>
 
-            <button class="motion-button" type="button" data-motion="turn-left-step">
+            <button class="motion-button" type="button" data-mode="greeting">
+              <span class="keycap">RIGHT</span>
+              <span>
+                <strong>Greeting</strong>
+                <small>Arrow Right</small>
+              </span>
+            </button>
+
+            <button class="motion-button" type="button" data-mode="forward">
+              <span class="keycap">W</span>
+              <span>
+                <strong>Forward</strong>
+                <small>Held mode</small>
+              </span>
+            </button>
+
+            <button class="motion-button" type="button" data-mode="backward">
+              <span class="keycap">S</span>
+              <span>
+                <strong>Backward</strong>
+                <small>Held mode</small>
+              </span>
+            </button>
+
+            <button class="motion-button" type="button" data-mode="turn_left">
               <span class="keycap">A</span>
               <span>
                 <strong>Left</strong>
-                <small>A: turn left step</small>
+                <small>Held mode</small>
               </span>
             </button>
 
-            <button class="motion-button" type="button" data-motion="turn-right-step">
+            <button class="motion-button" type="button" data-mode="turn_right">
               <span class="keycap">D</span>
               <span>
                 <strong>Right</strong>
-                <small>D: turn right step</small>
+                <small>Held mode</small>
               </span>
             </button>
           </div>
 
           <div class="readout-grid">
             <div>
-              <span class="readout-label">Initial</span>
-              <strong>slower arms</strong>
+              <span class="readout-label">OpenCV</span>
+              <strong id="opencvStatus">Reserved</strong>
             </div>
             <div>
-              <span class="readout-label">Stand Delay</span>
-              <strong>500 ms</strong>
+              <span class="readout-label">MediaPipe</span>
+              <strong id="mediapipeStatus">Reserved</strong>
             </div>
           </div>
 
@@ -97,7 +121,8 @@
           <div class="camera-frame">
             <div class="video-hud" aria-live="polite">
               <span id="hudConnection">Connecting</span>
-              <span id="hudMotion">Motion: none</span>
+              <span id="hudMode">Mode: manual</span>
+              <span id="hudMotion">Motion: stand</span>
               <span id="hudResult">Ready</span>
             </div>
             <img id="cameraImage" alt="Live camera feed from the UNO Q" />
@@ -110,7 +135,7 @@
         <div class="panel-header">
           <div>
             <h2>Pose Pulses</h2>
-            <p>Calibrated pulse targets used by the Arduino motion functions.</p>
+            <p>Calibrated pulse targets reused from the keyboard-motion prototype.</p>
           </div>
         </div>
         <div class="table-wrap">

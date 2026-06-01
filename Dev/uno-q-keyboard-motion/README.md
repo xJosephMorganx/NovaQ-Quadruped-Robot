@@ -58,8 +58,8 @@ Do not power the MG996R servos from the UNO Q. Use the external 6 V servo supply
 | `Arrow Right` | `greeting` | Short FL arm wave, then returns to stand |
 | `W` hold | `forward_step` loop | Gait forward while held, returns to stand on release |
 | `S` hold | `backward_step` loop | Gait backward while held, returns to stand on release |
-| `A` | future | Left turn |
-| `D` | future | Right turn |
+| `A` hold | `turn_left_step` loop | Turn left while held, returns to stand on release |
+| `D` hold | `turn_right_step` loop | Turn right while held, returns to stand on release |
 | `Page Down` | future | OpenCV blue ball detection |
 | `F4` | future | MediaPipe hand controller |
 | `Space` | future | Manual mode |
@@ -91,8 +91,8 @@ are not converted from degrees at runtime.
 
 - Motion functions are defined in `sketch/sketch.ino`.
 - Python calls `Bridge.call("run_motion", motion)`.
-- Supported motion names are `initial`, `stand`, `greeting`, `forward_step`, and
-  `backward_step`.
+- Supported motion names are `initial`, `stand`, `greeting`, `forward_step`,
+  `backward_step`, `turn_left_step`, and `turn_right_step`.
 - Servo pulses are clamped to `50-600`.
 - Smooth movement uses simultaneous group steps of `5` pulse counts every `15 ms`.
 - `initial` moves all arms up together with a slightly slower `22 ms` step delay,
@@ -110,6 +110,9 @@ are not converted from degrees at runtime.
 - `backward_step` uses the same timing and lifts as `forward_step`, with
   shoulder place/push ranges reversed. The web app repeats it while `S` is held
   and sends `stand` only when `S` is released.
+- `turn_left_step` and `turn_right_step` reuse the diagonal gait timing. One
+  side steps forward while the opposite side steps backward, so the robot pivots
+  while `A` or `D` is held and returns to `stand` on release.
 
 ## API
 
@@ -121,6 +124,8 @@ are not converted from degrees at runtime.
 | `GET` | `/api/motion/greeting` | Runs `greeting` through Bridge |
 | `GET` | `/api/motion/forward-step` | Runs one conservative forward gait step |
 | `GET` | `/api/motion/backward-step` | Runs one conservative backward gait step |
+| `GET` | `/api/motion/turn-left-step` | Runs one left turn gait step |
+| `GET` | `/api/motion/turn-right-step` | Runs one right turn gait step |
 | `GET` | `/api/motion?motion=initial` | Manual API compatibility endpoint |
 | `POST` | `/api/motion` | Also accepts `initial` or `stand` for manual API tests |
 | `GET` | `/api/camera-frame` | Snapshot camera frame as base64 JPEG |

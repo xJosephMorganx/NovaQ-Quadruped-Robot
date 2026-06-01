@@ -8,6 +8,10 @@ const state = {
   forwardGaitStopping: false,
   backwardGaitActive: false,
   backwardGaitStopping: false,
+  leftTurnActive: false,
+  leftTurnStopping: false,
+  rightTurnActive: false,
+  rightTurnStopping: false,
 };
 
 const elements = {
@@ -101,8 +105,6 @@ const motionKeyBindings = {
 };
 
 const reservedKeyBindings = {
-  a: "Left turn",
-  d: "Right turn",
   PageDown: "OpenCV blue ball detection",
   F4: "MediaPipe hand controller",
   " ": "Manual mode",
@@ -224,6 +226,64 @@ function stopBackwardGait() {
   setResult("Stopping backward gait...");
 }
 
+async function startLeftTurn() {
+  if (state.leftTurnActive) {
+    return;
+  }
+
+  state.leftTurnActive = true;
+  state.leftTurnStopping = false;
+  setResult("Left turn active");
+
+  while (state.leftTurnActive) {
+    await runMotion("turn-left-step");
+  }
+
+  if (state.leftTurnStopping) {
+    state.leftTurnStopping = false;
+    await runMotion("stand");
+  }
+}
+
+function stopLeftTurn() {
+  if (!state.leftTurnActive) {
+    return;
+  }
+
+  state.leftTurnActive = false;
+  state.leftTurnStopping = true;
+  setResult("Stopping left turn...");
+}
+
+async function startRightTurn() {
+  if (state.rightTurnActive) {
+    return;
+  }
+
+  state.rightTurnActive = true;
+  state.rightTurnStopping = false;
+  setResult("Right turn active");
+
+  while (state.rightTurnActive) {
+    await runMotion("turn-right-step");
+  }
+
+  if (state.rightTurnStopping) {
+    state.rightTurnStopping = false;
+    await runMotion("stand");
+  }
+}
+
+function stopRightTurn() {
+  if (!state.rightTurnActive) {
+    return;
+  }
+
+  state.rightTurnActive = false;
+  state.rightTurnStopping = true;
+  setResult("Stopping right turn...");
+}
+
 async function refreshCameraFrame() {
   if (state.mjpegMode) {
     return;
@@ -314,6 +374,18 @@ window.addEventListener("keydown", (event) => {
     return;
   }
 
+  if (event.key.toLowerCase() === "a") {
+    event.preventDefault();
+    startLeftTurn();
+    return;
+  }
+
+  if (event.key.toLowerCase() === "d") {
+    event.preventDefault();
+    startRightTurn();
+    return;
+  }
+
   const reservedAction = reservedKeyBindings[event.key] || reservedKeyBindings[event.key.toLowerCase()];
   if (reservedAction) {
     event.preventDefault();
@@ -334,6 +406,16 @@ window.addEventListener("keyup", (event) => {
   if (event.key.toLowerCase() === "s") {
     event.preventDefault();
     stopBackwardGait();
+  }
+
+  if (event.key.toLowerCase() === "a") {
+    event.preventDefault();
+    stopLeftTurn();
+  }
+
+  if (event.key.toLowerCase() === "d") {
+    event.preventDefault();
+    stopRightTurn();
   }
 });
 

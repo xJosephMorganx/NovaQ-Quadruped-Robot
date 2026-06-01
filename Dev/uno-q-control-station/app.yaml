@@ -1,0 +1,11 @@
+name: uno-q-control-station
+description: Definitive control station for Arduino UNO Q quadruped motion, camera, and vision modes.
+version: 0.1.0
+
+bricks:
+  - arduino:web_ui
+
+# WebUI serves the main app on port 7000. The optional MJPEG camera stream uses
+# port 7001 when App Lab exposes custom ports in the current environment.
+ports:
+  - 7001

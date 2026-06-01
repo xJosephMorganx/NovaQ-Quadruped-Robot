@@ -20,8 +20,16 @@ APP_DIR = Path(__file__).resolve().parent.parent
 CAMERA_DEVICE = 0
 CAMERA_FRAME_INTERVAL_SECONDS = 0.08
 MJPEG_PORT = 7001
-ALLOWED_MOTIONS = {"backward_step", "forward_step", "greeting", "initial", "stand"}
-TRANSIENT_MOTIONS = {"backward_step", "forward_step", "greeting"}
+ALLOWED_MOTIONS = {
+    "backward_step",
+    "forward_step",
+    "greeting",
+    "initial",
+    "stand",
+    "turn_left_step",
+    "turn_right_step",
+}
+TRANSIENT_MOTIONS = {"backward_step", "forward_step", "greeting", "turn_left_step", "turn_right_step"}
 
 POSE_TABLE = [
     {"name": "Shoulder_FL", "channel": 0, "initial": 170, "stand": 280, "greeting": "235-300"},
@@ -168,6 +176,14 @@ def backward_step_response() -> dict[str, Any]:
     return run_named_motion("backward_step")
 
 
+def turn_left_step_response() -> dict[str, Any]:
+    return run_named_motion("turn_left_step")
+
+
+def turn_right_step_response() -> dict[str, Any]:
+    return run_named_motion("turn_right_step")
+
+
 def camera_frame_response() -> dict[str, Any]:
     with camera_lock:
         if last_frame is None:
@@ -275,6 +291,8 @@ web_ui.expose_api("GET", "/api/motion/stand", stand_motion_response)
 web_ui.expose_api("GET", "/api/motion/greeting", greeting_motion_response)
 web_ui.expose_api("GET", "/api/motion/forward-step", forward_step_response)
 web_ui.expose_api("GET", "/api/motion/backward-step", backward_step_response)
+web_ui.expose_api("GET", "/api/motion/turn-left-step", turn_left_step_response)
+web_ui.expose_api("GET", "/api/motion/turn-right-step", turn_right_step_response)
 web_ui.expose_api("GET", "/api/motion", motion_response)
 web_ui.expose_api("POST", "/api/motion", motion_response)
 web_ui.expose_api("GET", "/api/camera-frame", camera_frame_response)
