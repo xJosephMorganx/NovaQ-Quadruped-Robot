@@ -39,6 +39,7 @@ Nueva app independiente para controlar el robot cuadrúpedo UNO Q sin reemplazar
   - La camara del brick usa `/dev/video0` directo y alimenta tambien el feed de la UI.
   - OpenCV queda reservado solo para el modo de pelota azul.
 - Sketch con PCA9685 en `0x40`, canales `0-7`, `50 Hz`, reutilizando pulsos, poses y gait del prototipo.
+  - `Shoulder_FR` calibrado en la app nueva con `initial=395`, `stand=330`; greeting ya no mueve ese hombro como soporte.
 
 ## Arquitectura de movimiento
 

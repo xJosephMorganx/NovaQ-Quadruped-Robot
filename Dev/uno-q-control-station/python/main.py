@@ -92,7 +92,7 @@ def normalize_mode_name(mode: str) -> str:
 POSE_TABLE = [
     {"name": "Shoulder_FL", "channel": 0, "initial": 170, "stand": 280, "greeting": "235-300"},
     {"name": "Leg_FL", "channel": 1, "initial": 513, "stand": 110, "greeting": 430},
-    {"name": "Shoulder_FR", "channel": 2, "initial": 395, "stand": 274, "greeting": 306},
+    {"name": "Shoulder_FR", "channel": 2, "initial": 395, "stand": 330},
     {"name": "Leg_FR", "channel": 3, "initial": 90, "stand": 500},
     {"name": "Shoulder_BL", "channel": 4, "initial": 412, "stand": 295},
     {"name": "Leg_BL", "channel": 5, "initial": 75, "stand": 495},

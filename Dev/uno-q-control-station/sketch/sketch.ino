@@ -47,7 +47,7 @@ const ServoTarget InitialLegs[] = {
 
 const ServoTarget StandShoulders[] = {
   {ChannelShoulderFL, 280},
-  {ChannelShoulderFR, 274},
+  {ChannelShoulderFR, 330},
   {ChannelShoulderBL, 295},
   {ChannelShoulderBR, 280},
 };
@@ -62,10 +62,6 @@ const ServoTarget StandLegs[] = {
 const ServoTarget GreetingSupportLegs[] = {
   {ChannelLegFL, 430},
   {ChannelLegBR, 180},
-};
-
-const ServoTarget GreetingSupportShoulders[] = {
-  {ChannelShoulderFR, 306},
 };
 
 const ServoTarget GreetingShoulderForward[] = {
@@ -83,7 +79,7 @@ const ServoTarget GreetingReturnFLToStand[] = {
 
 const ServoTarget GreetingReturnBRToStand[] = {
   {ChannelLegBR, 110},
-  {ChannelShoulderFR, 274},
+  {ChannelShoulderFR, 330},
 };
 
 const ServoTarget ForwardPrepare[] = {
@@ -119,7 +115,7 @@ const ServoTarget ForwardLiftB[] = {
 };
 
 const ServoTarget ForwardPlaceB[] = {
-  {ChannelShoulderFR, 350},
+  {ChannelShoulderFR, 395},
   {ChannelShoulderBL, 235},
 };
 
@@ -129,7 +125,7 @@ const ServoTarget ForwardPlantB[] = {
 };
 
 const ServoTarget ForwardPushB[] = {
-  {ChannelShoulderFR, 230},
+  {ChannelShoulderFR, 290},
   {ChannelShoulderBL, 345},
 };
 
@@ -144,12 +140,12 @@ const ServoTarget BackwardPushA[] = {
 };
 
 const ServoTarget BackwardPlaceB[] = {
-  {ChannelShoulderFR, 230},
+  {ChannelShoulderFR, 290},
   {ChannelShoulderBL, 345},
 };
 
 const ServoTarget BackwardPushB[] = {
-  {ChannelShoulderFR, 350},
+  {ChannelShoulderFR, 395},
   {ChannelShoulderBL, 235},
 };
 
@@ -164,12 +160,12 @@ const ServoTarget TurnLeftPushA[] = {
 };
 
 const ServoTarget TurnLeftPlaceB[] = {
-  {ChannelShoulderFR, 350},
+  {ChannelShoulderFR, 395},
   {ChannelShoulderBL, 345},
 };
 
 const ServoTarget TurnLeftPushB[] = {
-  {ChannelShoulderFR, 230},
+  {ChannelShoulderFR, 290},
   {ChannelShoulderBL, 235},
 };
 
@@ -184,12 +180,12 @@ const ServoTarget TurnRightPushA[] = {
 };
 
 const ServoTarget TurnRightPlaceB[] = {
-  {ChannelShoulderFR, 230},
+  {ChannelShoulderFR, 290},
   {ChannelShoulderBL, 235},
 };
 
 const ServoTarget TurnRightPushB[] = {
-  {ChannelShoulderFR, 350},
+  {ChannelShoulderFR, 395},
   {ChannelShoulderBL, 345},
 };
 
@@ -268,8 +264,6 @@ void moveStand() {
 
 void moveGreeting() {
   moveStand();
-  delay(MotionStageDelayMs);
-  moveTargetsSmooth(GreetingSupportShoulders, sizeof(GreetingSupportShoulders) / sizeof(GreetingSupportShoulders[0]));
   delay(MotionStageDelayMs);
   moveTargetsSmooth(GreetingSupportLegs, sizeof(GreetingSupportLegs) / sizeof(GreetingSupportLegs[0]));
   delay(MotionStageDelayMs);
