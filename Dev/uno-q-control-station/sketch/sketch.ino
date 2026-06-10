@@ -33,7 +33,7 @@ struct ServoTarget {
 
 const ServoTarget InitialShoulders[] = {
   {ChannelShoulderFL, 170},
-  {ChannelShoulderFR, 376},
+  {ChannelShoulderFR, 395},
   {ChannelShoulderBL, 412},
   {ChannelShoulderBR, 175},
 };
@@ -47,7 +47,7 @@ const ServoTarget InitialLegs[] = {
 
 const ServoTarget StandShoulders[] = {
   {ChannelShoulderFL, 280},
-  {ChannelShoulderFR, 265},
+  {ChannelShoulderFR, 274},
   {ChannelShoulderBL, 295},
   {ChannelShoulderBR, 280},
 };
@@ -65,7 +65,7 @@ const ServoTarget GreetingSupportLegs[] = {
 };
 
 const ServoTarget GreetingSupportShoulders[] = {
-  {ChannelShoulderFR, 295},
+  {ChannelShoulderFR, 306},
 };
 
 const ServoTarget GreetingShoulderForward[] = {
@@ -83,7 +83,7 @@ const ServoTarget GreetingReturnFLToStand[] = {
 
 const ServoTarget GreetingReturnBRToStand[] = {
   {ChannelLegBR, 110},
-  {ChannelShoulderFR, 265},
+  {ChannelShoulderFR, 274},
 };
 
 const ServoTarget ForwardPrepare[] = {
@@ -119,7 +119,7 @@ const ServoTarget ForwardLiftB[] = {
 };
 
 const ServoTarget ForwardPlaceB[] = {
-  {ChannelShoulderFR, 335},
+  {ChannelShoulderFR, 350},
   {ChannelShoulderBL, 235},
 };
 
@@ -129,7 +129,7 @@ const ServoTarget ForwardPlantB[] = {
 };
 
 const ServoTarget ForwardPushB[] = {
-  {ChannelShoulderFR, 225},
+  {ChannelShoulderFR, 230},
   {ChannelShoulderBL, 345},
 };
 
@@ -144,12 +144,12 @@ const ServoTarget BackwardPushA[] = {
 };
 
 const ServoTarget BackwardPlaceB[] = {
-  {ChannelShoulderFR, 225},
+  {ChannelShoulderFR, 230},
   {ChannelShoulderBL, 345},
 };
 
 const ServoTarget BackwardPushB[] = {
-  {ChannelShoulderFR, 335},
+  {ChannelShoulderFR, 350},
   {ChannelShoulderBL, 235},
 };
 
@@ -164,12 +164,12 @@ const ServoTarget TurnLeftPushA[] = {
 };
 
 const ServoTarget TurnLeftPlaceB[] = {
-  {ChannelShoulderFR, 335},
+  {ChannelShoulderFR, 350},
   {ChannelShoulderBL, 345},
 };
 
 const ServoTarget TurnLeftPushB[] = {
-  {ChannelShoulderFR, 225},
+  {ChannelShoulderFR, 230},
   {ChannelShoulderBL, 235},
 };
 
@@ -184,12 +184,12 @@ const ServoTarget TurnRightPushA[] = {
 };
 
 const ServoTarget TurnRightPlaceB[] = {
-  {ChannelShoulderFR, 225},
+  {ChannelShoulderFR, 230},
   {ChannelShoulderBL, 235},
 };
 
 const ServoTarget TurnRightPushB[] = {
-  {ChannelShoulderFR, 335},
+  {ChannelShoulderFR, 350},
   {ChannelShoulderBL, 345},
 };
 
