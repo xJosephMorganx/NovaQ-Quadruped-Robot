@@ -64,6 +64,10 @@ const ServoTarget GreetingSupportLegs[] = {
   {ChannelLegBR, 180},
 };
 
+const ServoTarget GreetingSupportShoulders[] = {
+  {ChannelShoulderFR, 350},
+};
+
 const ServoTarget GreetingShoulderForward[] = {
   {ChannelShoulderFL, 235},
 };
@@ -265,6 +269,8 @@ void moveStand() {
 void moveGreeting() {
   moveStand();
   delay(MotionStageDelayMs);
+  moveTargetsSmooth(GreetingSupportShoulders, sizeof(GreetingSupportShoulders) / sizeof(GreetingSupportShoulders[0]));
+  delay(MotionStageDelayMs);
   moveTargetsSmooth(GreetingSupportLegs, sizeof(GreetingSupportLegs) / sizeof(GreetingSupportLegs[0]));
   delay(MotionStageDelayMs);
 
@@ -278,6 +284,8 @@ void moveGreeting() {
   moveTargetsSmooth(GreetingReturnFLToStand, sizeof(GreetingReturnFLToStand) / sizeof(GreetingReturnFLToStand[0]));
   delay(MotionStageDelayMs);
   moveTargetsSmooth(GreetingReturnBRToStand, sizeof(GreetingReturnBRToStand) / sizeof(GreetingReturnBRToStand[0]));
+  delay(MotionStageDelayMs);
+  moveTargetsSmooth(StandShoulders, sizeof(StandShoulders) / sizeof(StandShoulders[0]));
 }
 
 void moveGaitStep(
