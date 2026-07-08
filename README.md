@@ -1,4 +1,4 @@
-# Quadruped Robot with Computer Vision
+# NovaQ Quadruped Robot with Computer Vision
 
 This repository documents and contains the files for a real quadruped robot built around an Arduino UNO Q. The project combines mechanical design, 3D printed parts, embedded motion control, a Python control layer, a web-based operator interface, and computer vision routines using OpenCV and Edge Impulse.
 
