@@ -73,7 +73,7 @@ const ServoTarget GreetingSupportLegs[] = {
 };
 
 const ServoTarget GreetingSupportShoulders[] = {
-  {ChannelShoulderFR, 350},
+  {ChannelShoulderFR, 380},
 };
 
 const ServoTarget GreetingShoulderForward[] = {

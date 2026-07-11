@@ -971,7 +971,7 @@ def setup_gesture_detector() -> Any:
 
     try:
         camera = DirectOpenCVCamera(device=CAMERA_DEVICE, resolution=(640, 480), fps=10)
-        detector = VideoObjectDetection(camera=camera, confidence=0.45, debounce_sec=0.35, camera_preview=True)
+        detector = VideoObjectDetection(camera=camera, confidence=0.40, debounce_sec=0.35, camera_preview=True)
         detector.on_detect_all(on_gesture_detections)
         with vision_lock:
             vision_status["handGesture"] = "Gesture brick ready: waiting for hand"
