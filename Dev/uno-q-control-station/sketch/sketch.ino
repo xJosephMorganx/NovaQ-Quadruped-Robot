@@ -14,6 +14,8 @@ constexpr uint16_t InitialArmsStepDelayMs = 22;
 constexpr uint16_t MotionStageDelayMs = 500;
 constexpr uint16_t GreetingWavePauseMs = 120;
 constexpr uint8_t GreetingWaveCycles = 3;
+constexpr uint16_t TailWagPauseMs = 120;
+constexpr uint8_t TailWagCycles = 4;
 constexpr uint16_t GaitStepDelayMs = 5;
 constexpr uint16_t GaitFramePauseMs = 20;
 
@@ -31,10 +33,12 @@ struct ServoTarget {
   uint16_t pulse;
 };
 
+//Initial
+
 const ServoTarget InitialShoulders[] = {
-  {ChannelShoulderFL, 170},
-  {ChannelShoulderFR, 395},
-  {ChannelShoulderBL, 412},
+  {ChannelShoulderFL, 175},
+  {ChannelShoulderFR, 440},
+  {ChannelShoulderBL, 405},
   {ChannelShoulderBR, 175},
 };
 
@@ -45,11 +49,13 @@ const ServoTarget InitialLegs[] = {
   {ChannelLegBR, 525},
 };
 
+//Stand
+
 const ServoTarget StandShoulders[] = {
-  {ChannelShoulderFL, 280},
-  {ChannelShoulderFR, 330},
+  {ChannelShoulderFL, 278},
+  {ChannelShoulderFR, 328},
   {ChannelShoulderBL, 295},
-  {ChannelShoulderBR, 280},
+  {ChannelShoulderBR, 283},
 };
 
 const ServoTarget StandLegs[] = {
@@ -58,6 +64,8 @@ const ServoTarget StandLegs[] = {
   {ChannelLegBL, 495},
   {ChannelLegBR, 110},
 };
+
+//Greeting
 
 const ServoTarget GreetingSupportLegs[] = {
   {ChannelLegFL, 430},
@@ -73,18 +81,46 @@ const ServoTarget GreetingShoulderForward[] = {
 };
 
 const ServoTarget GreetingShoulderBack[] = {
-  {ChannelShoulderFL, 300},
+  {ChannelShoulderFL, 328},
 };
 
 const ServoTarget GreetingReturnFLToStand[] = {
   {ChannelLegFL, 110},
-  {ChannelShoulderFL, 280},
+  {ChannelShoulderFL, 278},
 };
 
 const ServoTarget GreetingReturnBRToStand[] = {
   {ChannelLegBR, 110},
-  {ChannelShoulderFR, 330},
+  {ChannelShoulderFR, 328},
 };
+
+//Tail Wag
+
+const ServoTarget TailWagPose[] = {
+  // Hombros delanteros en posición vertical.
+  {ChannelShoulderFL, 175},
+  {ChannelShoulderFR, 440},
+
+  // Piernas delanteras aproximadamente a 90 grados.
+  {ChannelLegFL, 312},
+  {ChannelLegFR, 295},
+
+  // Piernas traseras en posición de pie.
+  {ChannelLegBL, 495},
+  {ChannelLegBR, 110},
+};
+
+const ServoTarget TailWagSideA[] = {
+  {ChannelShoulderBL, 240},
+  {ChannelShoulderBR, 229},
+};
+
+const ServoTarget TailWagSideB[] = {
+  {ChannelShoulderBL, 350},
+  {ChannelShoulderBR, 336},
+};
+
+//Forward
 
 const ServoTarget ForwardPrepare[] = {
   {ChannelLegFL, 110},
@@ -99,8 +135,8 @@ const ServoTarget ForwardLiftA[] = {
 };
 
 const ServoTarget ForwardPlaceA[] = {
-  {ChannelShoulderFL, 225},
-  {ChannelShoulderBR, 335},
+  {ChannelShoulderFL, 226},
+  {ChannelShoulderBR, 336},
 };
 
 const ServoTarget ForwardPlantA[] = {
@@ -109,8 +145,8 @@ const ServoTarget ForwardPlantA[] = {
 };
 
 const ServoTarget ForwardPushA[] = {
-  {ChannelShoulderFL, 335},
-  {ChannelShoulderBR, 225},
+  {ChannelShoulderFL, 329},
+  {ChannelShoulderBR, 229},
 };
 
 const ServoTarget ForwardLiftB[] = {
@@ -119,8 +155,8 @@ const ServoTarget ForwardLiftB[] = {
 };
 
 const ServoTarget ForwardPlaceB[] = {
-  {ChannelShoulderFR, 395},
-  {ChannelShoulderBL, 235},
+  {ChannelShoulderFR, 384},
+  {ChannelShoulderBL, 240},
 };
 
 const ServoTarget ForwardPlantB[] = {
@@ -129,69 +165,77 @@ const ServoTarget ForwardPlantB[] = {
 };
 
 const ServoTarget ForwardPushB[] = {
-  {ChannelShoulderFR, 290},
-  {ChannelShoulderBL, 345},
+  {ChannelShoulderFR, 271},
+  {ChannelShoulderBL, 350},
 };
 
+//Backward
+
 const ServoTarget BackwardPlaceA[] = {
-  {ChannelShoulderFL, 335},
-  {ChannelShoulderBR, 225},
+  {ChannelShoulderFL, 329},
+  {ChannelShoulderBR, 229},
 };
 
 const ServoTarget BackwardPushA[] = {
-  {ChannelShoulderFL, 225},
-  {ChannelShoulderBR, 335},
+  {ChannelShoulderFL, 226},
+  {ChannelShoulderBR, 336},
 };
 
 const ServoTarget BackwardPlaceB[] = {
-  {ChannelShoulderFR, 290},
-  {ChannelShoulderBL, 345},
+  {ChannelShoulderFR, 271},
+  {ChannelShoulderBL, 350},
 };
 
 const ServoTarget BackwardPushB[] = {
-  {ChannelShoulderFR, 395},
-  {ChannelShoulderBL, 235},
+  {ChannelShoulderFR, 384},
+  {ChannelShoulderBL, 240},
 };
 
+//Left
+
 const ServoTarget TurnLeftPlaceA[] = {
-  {ChannelShoulderFL, 335},
-  {ChannelShoulderBR, 335},
+  {ChannelShoulderFL, 329},
+  {ChannelShoulderBR, 336},
 };
 
 const ServoTarget TurnLeftPushA[] = {
-  {ChannelShoulderFL, 225},
-  {ChannelShoulderBR, 225},
+  {ChannelShoulderFL, 226},
+  {ChannelShoulderBR, 229},
 };
 
 const ServoTarget TurnLeftPlaceB[] = {
-  {ChannelShoulderFR, 395},
-  {ChannelShoulderBL, 345},
+  {ChannelShoulderFR, 384},
+  {ChannelShoulderBL, 350},
 };
 
 const ServoTarget TurnLeftPushB[] = {
-  {ChannelShoulderFR, 290},
-  {ChannelShoulderBL, 235},
+  {ChannelShoulderFR, 271},
+  {ChannelShoulderBL, 240},
 };
 
+//Right
+
 const ServoTarget TurnRightPlaceA[] = {
-  {ChannelShoulderFL, 225},
-  {ChannelShoulderBR, 225},
+  {ChannelShoulderFL, 226},
+  {ChannelShoulderBR, 229},
 };
 
 const ServoTarget TurnRightPushA[] = {
-  {ChannelShoulderFL, 335},
-  {ChannelShoulderBR, 335},
+  {ChannelShoulderFL, 329},
+  {ChannelShoulderBR, 336},
 };
 
 const ServoTarget TurnRightPlaceB[] = {
-  {ChannelShoulderFR, 290},
-  {ChannelShoulderBL, 235},
+  {ChannelShoulderFR, 271},
+  {ChannelShoulderBL, 240},
 };
 
 const ServoTarget TurnRightPushB[] = {
-  {ChannelShoulderFR, 395},
-  {ChannelShoulderBL, 345},
+  {ChannelShoulderFR, 384},
+  {ChannelShoulderBL, 350},
 };
+
+//
 
 Adafruit_PWMServoDriver pwm = Adafruit_PWMServoDriver(Pca9685Address);
 uint16_t currentPulses[LastServoChannel + 1] = {300, 300, 300, 300, 300, 300, 300, 300};
@@ -284,8 +328,37 @@ void moveGreeting() {
   moveTargetsSmooth(GreetingReturnFLToStand, sizeof(GreetingReturnFLToStand) / sizeof(GreetingReturnFLToStand[0]));
   delay(MotionStageDelayMs);
   moveTargetsSmooth(GreetingReturnBRToStand, sizeof(GreetingReturnBRToStand) / sizeof(GreetingReturnBRToStand[0]));
+}
+
+void moveTailWag() {
+  // Comienza desde una posición estable.
+  moveStand();
   delay(MotionStageDelayMs);
-  moveTargetsSmooth(StandShoulders, sizeof(StandShoulders) / sizeof(StandShoulders[0]));
+
+  // Coloca la parte delantera y las piernas traseras.
+  moveTargetsSmooth(
+    TailWagPose,
+    sizeof(TailWagPose) / sizeof(TailWagPose[0])
+  );
+  delay(MotionStageDelayMs);
+
+  // Mueve los hombros traseros de lado a lado.
+  for (uint8_t cycle = 0; cycle < TailWagCycles; cycle++) {
+    moveTargetsSmooth(
+      TailWagSideA,
+      sizeof(TailWagSideA) / sizeof(TailWagSideA[0])
+    );
+    delay(TailWagPauseMs);
+
+    moveTargetsSmooth(
+      TailWagSideB,
+      sizeof(TailWagSideB) / sizeof(TailWagSideB[0])
+    );
+    delay(TailWagPauseMs);
+  }
+
+  // Regresa a la posición de pie.
+  moveStand();
 }
 
 void moveGaitStep(
@@ -351,6 +424,11 @@ String runMotion(String motionName) {
     return "ok: greeting";
   }
 
+  if (motionName == "tail_wag") {
+    moveTailWag();
+    return "ok: tail_wag";
+  }
+
   if (motionName == "forward_step") {
     moveForwardStep();
     return "ok: forward_step";
@@ -392,6 +470,11 @@ String runModeStep(String modeName) {
   if (modeName == "greeting") {
     moveGreeting();
     return "ok: greeting";
+  }
+
+  if (modeName == "tail_wag") {
+    moveTailWag();
+    return "ok: tail_wag";
   }
 
   if (modeName == "forward") {

@@ -46,6 +46,7 @@ const poseKeyToMode = {
   ArrowUp: "stand",
   ArrowDown: "initial",
   ArrowRight: "greeting",
+  ArrowLeft: "tail_wag",
 };
 
 const reservedKeyBindings = {

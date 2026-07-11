@@ -43,15 +43,15 @@ OPENCV_STEP_COOLDOWN_SECONDS = 1.5
 OPENCV_SEARCH_BURST_STEPS = 3
 ENABLE_GESTURE_BRICK = os.environ.get("UNO_Q_ENABLE_GESTURE_BRICK", "1").strip().lower() not in {"0", "false", "no"}
 HAND_ACTION_COOLDOWN_SECONDS = 2.5
-HAND_STABLE_GESTURES_REQUIRED = 3
-BLUE_HSV_LOWER = (98, 105, 55)
-BLUE_HSV_UPPER = (135, 255, 255)
-BLUE_MIN_MASK_AREA = 380
-BLUE_MIN_RADIUS = 12
+HAND_STABLE_GESTURES_REQUIRED = 2
+BLUE_HSV_LOWER = (95, 70, 30)
+BLUE_HSV_UPPER = (140, 255, 255)
+BLUE_MIN_MASK_AREA = 150
+BLUE_MIN_RADIUS = 8
 BLUE_MAX_RADIUS_RATIO = 0.38
 BLUE_CLOSE_RADIUS_RATIO = 0.24
-BLUE_MIN_CIRCULARITY = 0.72
-BLUE_MIN_FILL_RATIO = 0.50
+BLUE_MIN_CIRCULARITY = 0.55
+BLUE_MIN_FILL_RATIO = 0.40
 BLUE_MAX_FILL_RATIO = 1.18
 BLUE_CENTER_DEADZONE_RATIO = 0.32
 BLUE_STABLE_DETECTIONS_REQUIRED = 2
@@ -64,13 +64,14 @@ CONTROL_MODE_ALIASES = {
     "handgesture": HAND_GESTURE_MODE,
     "mediapipe": HAND_GESTURE_MODE,
 }
-MOTION_MODES = {"initial", "stand", "greeting", "forward", "backward", "turn_left", "turn_right"}
+MOTION_MODES = {"initial", "stand", "greeting", "tail_wag", "forward", "backward", "turn_left", "turn_right"}
 CONTINUOUS_MOTION_MODES = {"forward", "backward", "turn_left", "turn_right"}
-ONE_SHOT_MOTION_MODES = {"initial", "stand", "greeting"}
+ONE_SHOT_MOTION_MODES = {"initial", "stand", "greeting", "tail_wag"}
 MODE_TO_LEGACY_MOTION = {
     "initial": "initial",
     "stand": "stand",
     "greeting": "greeting",
+    "tail_wag": "tail_wag",
     "forward": "forward_step",
     "backward": "backward_step",
     "turn_left": "turn_left_step",
@@ -78,9 +79,9 @@ MODE_TO_LEGACY_MOTION = {
 }
 LEGACY_MOTION_TO_MODE = {legacy: mode for mode, legacy in MODE_TO_LEGACY_MOTION.items()}
 GESTURE_LABEL_TO_MOTION = {
-    "five": "turn_right",
-    "good": "forward",
-    "neut": "backward",
+    "five": "initial",
+    "good": "stand",
+    "neut": "tail_wag",
     "peace": "greeting",
 }
 
@@ -90,14 +91,58 @@ def normalize_mode_name(mode: str) -> str:
     return CONTROL_MODE_ALIASES.get(normalized, normalized)
 
 POSE_TABLE = [
-    {"name": "Shoulder_FL", "channel": 0, "initial": 170, "stand": 280, "greeting": "235-300"},
-    {"name": "Leg_FL", "channel": 1, "initial": 513, "stand": 110, "greeting": 430},
-    {"name": "Shoulder_FR", "channel": 2, "initial": 395, "stand": 330, "greeting": 350},
-    {"name": "Leg_FR", "channel": 3, "initial": 90, "stand": 500},
-    {"name": "Shoulder_BL", "channel": 4, "initial": 412, "stand": 295},
-    {"name": "Leg_BL", "channel": 5, "initial": 75, "stand": 495},
-    {"name": "Shoulder_BR", "channel": 6, "initial": 175, "stand": 280},
-    {"name": "Leg_BR", "channel": 7, "initial": 525, "stand": 110, "greeting": 180},
+    {
+        "name": "Shoulder_FL",
+        "channel": 0,
+        "initial": 175,
+        "stand": 278,
+        "greeting": "235-328",
+    },
+    {
+        "name": "Leg_FL",
+        "channel": 1,
+        "initial": 513,
+        "stand": 110,
+        "greeting": 430,
+    },
+    {
+        "name": "Shoulder_FR",
+        "channel": 2,
+        "initial": 440,
+        "stand": 328,
+        "greeting": 350,
+    },
+    {
+        "name": "Leg_FR",
+        "channel": 3,
+        "initial": 90,
+        "stand": 500,
+    },
+    {
+        "name": "Shoulder_BL",
+        "channel": 4,
+        "initial": 405,
+        "stand": 295,
+    },
+    {
+        "name": "Leg_BL",
+        "channel": 5,
+        "initial": 75,
+        "stand": 495,
+    },
+    {
+        "name": "Shoulder_BR",
+        "channel": 6,
+        "initial": 175,
+        "stand": 283,
+    },
+    {
+        "name": "Leg_BR",
+        "channel": 7,
+        "initial": 525,
+        "stand": 110,
+        "greeting": 180,
+    },
 ]
 
 logging.basicConfig(level=logging.INFO, format="[%(levelname)s] %(message)s")
@@ -348,7 +393,7 @@ class MotionController:
                 self._execute_step(snapshot.desired_motion, snapshot.generation)
                 continue
 
-            if snapshot.current_motion != snapshot.desired_motion:
+            if snapshot.generation != snapshot.executed_generation:
                 self._execute_step(snapshot.desired_motion, snapshot.generation)
                 continue
 
@@ -570,11 +615,19 @@ def camera_capture_loop() -> None:
 
 def detect_blue_ball(frame: Any) -> dict[str, Any]:
     height, width = frame.shape[:2]
-    hsv = cv2.cvtColor(frame, cv2.COLOR_BGR2HSV)
+    blurred_frame = cv2.GaussianBlur(frame, (5, 5), 0)
+    hsv = cv2.cvtColor(blurred_frame, cv2.COLOR_BGR2HSV)
+
     mask = cv2.inRange(hsv, BLUE_HSV_LOWER, BLUE_HSV_UPPER)
-    kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (5, 5))
-    mask = cv2.morphologyEx(mask, cv2.MORPH_OPEN, kernel)
+
+    kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (7, 7))
+
+    # Primero rellena huecos causados por sombras.
     mask = cv2.morphologyEx(mask, cv2.MORPH_CLOSE, kernel)
+
+    # Después elimina pequeños puntos de ruido.
+    mask = cv2.morphologyEx(mask, cv2.MORPH_OPEN, kernel)
+
     mask_area = int(cv2.countNonZero(mask))
 
     detection = {
@@ -918,7 +971,7 @@ def setup_gesture_detector() -> Any:
 
     try:
         camera = DirectOpenCVCamera(device=CAMERA_DEVICE, resolution=(640, 480), fps=10)
-        detector = VideoObjectDetection(camera=camera, confidence=0.60, debounce_sec=0.60, camera_preview=True)
+        detector = VideoObjectDetection(camera=camera, confidence=0.45, debounce_sec=0.35, camera_preview=True)
         detector.on_detect_all(on_gesture_detections)
         with vision_lock:
             vision_status["handGesture"] = "Gesture brick ready: waiting for hand"
@@ -1075,6 +1128,7 @@ web_ui.expose_api("POST", "/api/mode", mode_response)
 web_ui.expose_api("GET", "/api/mode/initial", lambda: mode_path_response("initial"))
 web_ui.expose_api("GET", "/api/mode/stand", lambda: mode_path_response("stand"))
 web_ui.expose_api("GET", "/api/mode/greeting", lambda: mode_path_response("greeting"))
+web_ui.expose_api("GET", "/api/mode/tail-wag", lambda: mode_path_response("tail_wag"))
 web_ui.expose_api("GET", "/api/mode/forward", lambda: mode_path_response("forward"))
 web_ui.expose_api("GET", "/api/mode/backward", lambda: mode_path_response("backward"))
 web_ui.expose_api("GET", "/api/mode/turn-left", lambda: mode_path_response("turn_left"))
