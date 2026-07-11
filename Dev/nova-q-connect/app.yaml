@@ -1,0 +1,14 @@
+name: nova-q-connect
+description: Modern control and vision hub for the NovaQ quadruped.
+version: 0.1.0
+
+bricks:
+  - arduino:video_object_detection:
+      variables:
+        EI_OBJ_DETECTION_MODEL: /home/arduino/.arduino-bricks/ei-models/hand_gesture.eim
+  - arduino:web_ui
+
+# WebUI serves the main app on port 7000. The optional MJPEG camera stream uses
+# port 7001 when App Lab exposes custom ports in the current environment.
+ports:
+  - 7001

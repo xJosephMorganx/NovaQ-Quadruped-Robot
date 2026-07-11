@@ -43,7 +43,9 @@ The full mechanical design is also included for download and modification:
 - `Design/Nova-Q.f3z`: editable Fusion 360 archive.
 - `Design/Nova-Q.step`: neutral CAD export for other CAD tools.
 
-![Exploded robot assembly in Fusion 360](docs/images/mechanical-complete-design.png)
+![completed robot assembly in Fusion 360](docs/images/mechanical-complete-design.png)
+
+![Exploded robot assembly in Fusion 360](docs/images/mechanical-exploded-view.png)
 
 ## Electrical and Electronic Design
 
@@ -102,6 +104,7 @@ Main software tools and libraries:
 The web app is the main operator interface. It provides manual movement controls, keyboard input, connection state, last executed action, camera feedback, and access to the OpenCV and Edge Impulse modes.
 
 ![Robot web control interface](docs/images/web-control-interface.png)
+![Robot web control interface fullscreen](docs/images/fullscreen.png)
 
 Common controls:
 
@@ -171,12 +174,6 @@ The camera is also used for live video feedback during manual operation.
    http://<UNO_Q_IP>:7000
    ```
 
-Optional MJPEG stream:
-
-```text
-http://<UNO_Q_IP>:7001/video-feed
-```
-
 ## Usage
 
 Before running gait routines, test the robot with the servo power disconnected and verify that the web app loads correctly. Then power the servos with the robot lifted off the table and test initial and stand positions first.
@@ -231,7 +228,6 @@ Recommended startup sequence:
 
 - The STL files in `Design/STL/` are included as printable mechanical parts. The editable Fusion 360 archive and STEP export are available in `Design/`.
 - Servo pulse values depend on physical assembly and calibration. Recalibrate if servos, mounts, or linkages are changed.
-- The Edge Impulse model referenced by the control station is expected on the UNO Q at `/home/arduino/.arduino-bricks/ei-models/hand_gesture.eim`.
 - If additional external CAD files, trained models, or third-party assets are added later, their source and license should be documented in this README.
 - The repository focuses on the complete robot implementation: electronics, firmware, Python software, web interface, mechanical integration, printable files, and documentation.
 

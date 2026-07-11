@@ -1,0 +1,124 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1" />
+    <meta name="theme-color" content="#070b12" />
+    <title>NovaQ Connect</title>
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <main class="app-shell">
+      <header class="top-bar">
+        <div class="brand-block">
+          <span class="brand-mark" aria-hidden="true"></span>
+          <div>
+            <h1>NovaQ Connect</h1>
+            <p>Quadruped control and vision hub</p>
+          </div>
+        </div>
+        <div class="header-status" aria-live="polite">
+          <span id="connectionStatus" class="status-pill status-warning"><i></i>Connecting</span>
+          <span id="appMode" class="status-pill">Mode: manual</span>
+          <span id="currentMotion" class="status-pill">Motion: none</span>
+          <button id="focusModeButton" class="icon-button focus-button" type="button" aria-label="Enter fullscreen">
+            <svg class="fullscreen-icon" aria-hidden="true" viewBox="0 0 24 24" width="18" height="18">
+              <path d="M8 3H3v5M16 3h5v5M8 21H3v-5M16 21h5v-5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+            </svg>
+            <span id="focusButtonLabel">Fullscreen</span>
+          </button>
+        </div>
+      </header>
+
+      <section class="workspace" aria-label="NovaQ control workspace">
+        <section class="control-panel" aria-label="Robot controls">
+          <div class="mode-section">
+            <div class="section-label">Mode</div>
+            <div class="mode-strip" aria-label="Control mode selector">
+              <button class="mode-button is-active" type="button" data-app-mode="manual">Manual</button>
+              <button class="mode-button" type="button" data-app-mode="opencv">OpenCV</button>
+              <button class="mode-button" type="button" data-app-mode="hand_gesture">Hand Gesture</button>
+            </div>
+          </div>
+          <div class="movement-section">
+            <div class="section-label">Movement</div>
+            <div class="dpad" aria-label="Hold directional controls to move">
+              <button class="drive-button drive-up" type="button" data-drive-mode="forward" aria-label="Move forward">
+                <strong>W</strong><small>Forward</small>
+              </button>
+              <button class="drive-button drive-left" type="button" data-drive-mode="turn_left" aria-label="Turn left">
+                <strong>A</strong><small>Left</small>
+              </button>
+              <div class="dpad-center" aria-hidden="true"></div>
+              <button class="drive-button drive-right" type="button" data-drive-mode="turn_right" aria-label="Turn right">
+                <strong>D</strong><small>Right</small>
+              </button>
+              <button class="drive-button drive-down" type="button" data-drive-mode="backward" aria-label="Move backward">
+                <strong>S</strong><small>Backward</small>
+              </button>
+            </div>
+          </div>
+
+          <div class="poses-section">
+            <div class="section-label">Animations / Poses</div>
+            <div class="pose-grid">
+              <button class="pose-button" type="button" data-pose-mode="initial">
+                <span class="pose-preview pose-initial" aria-hidden="true"><i></i></span>
+                <strong>Initial</strong><small>↓</small>
+              </button>
+              <button class="pose-button" type="button" data-pose-mode="stand">
+                <span class="pose-preview pose-stand" aria-hidden="true"><i></i></span>
+                <strong>Stand</strong><small>↑</small>
+              </button>
+              <button class="pose-button" type="button" data-pose-mode="greeting">
+                <span class="pose-preview pose-greeting" aria-hidden="true"><i></i></span>
+                <strong>Greeting</strong><small>→</small>
+              </button>
+              <button class="pose-button" type="button" data-pose-mode="tail_wag">
+                <span class="pose-preview pose-tail" aria-hidden="true"><i></i></span>
+                <strong>Tail Wag</strong><small>←</small>
+              </button>
+            </div>
+          </div>
+        </section>
+
+        <section class="camera-panel" aria-label="Live camera">
+          <div class="camera-header">
+            <div>
+              <span class="section-label">Live Camera</span>
+              <span id="cameraStatus" class="camera-status" hidden>Starting camera</span>
+            </div>
+            <button id="toggleStreamButton" class="stream-button" type="button">MJPEG</button>
+          </div>
+
+          <div id="cameraStage" class="camera-stage">
+            <div id="cameraBackdrop" class="camera-backdrop" aria-hidden="true"></div>
+            <div class="camera-frame">
+              <img id="cameraImage" alt="Live camera feed from NovaQ" />
+              <div id="cameraFallback" class="camera-fallback">Camera unavailable</div>
+              <div class="focus-hud" aria-live="polite">
+                <span id="hudConnection"><i></i>Connecting</span>
+                <span id="hudMode">Mode: manual</span>
+                <span id="hudMotion">Motion: stand</span>
+              </div>
+              <button id="exitFocusButton" class="exit-focus-button" type="button" aria-label="Exit Focus view">
+                <svg aria-hidden="true" viewBox="0 0 24 24" width="18" height="18">
+                  <path d="M6 6l12 12M18 6L6 18" fill="none" stroke="currentColor" stroke-width="2.25" stroke-linecap="round" />
+                </svg>
+              </button>
+            </div>
+          </div>
+
+          <div class="diagnostic-grid" aria-live="polite">
+            <div class="diagnostic-card"><span>Camera</span><strong id="cameraReadout">Starting</strong></div>
+            <div class="diagnostic-card"><span>Vision</span><strong id="visionStatus">Reserved</strong></div>
+            <div class="diagnostic-card"><span>Desired</span><strong id="desiredMotion">stand</strong></div>
+            <div class="diagnostic-card"><span>Current</span><strong id="currentMotionReadout">none</strong></div>
+            <div class="diagnostic-card result-card"><span>Result</span><strong id="lastResult">Ready</strong></div>
+          </div>
+        </section>
+      </section>
+    </main>
+    <script src="/app.js"></script>
+  </body>
+</html>
