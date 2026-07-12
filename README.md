@@ -101,10 +101,14 @@ Main software tools and libraries:
 
 ## Web App
 
-The web app is the main operator interface. It provides manual movement controls, keyboard input, connection state, last executed action, camera feedback, and access to the OpenCV and Edge Impulse modes.
+The web app is the main operator interface. It provides manual movement controls, keyboard input, touch input, connection state, last executed action, camera feedback, and access to the OpenCV and Edge Impulse modes.
 
+## Desktop
 ![Robot web control interface](docs/images/web-control-interface.png)
 ![Robot web control interface fullscreen](docs/images/fullscreen.png)
+
+## Mobile
+![Robot web control interface fullscreen](docs/images/mobilapp.jpeg)
 
 Common controls:
 

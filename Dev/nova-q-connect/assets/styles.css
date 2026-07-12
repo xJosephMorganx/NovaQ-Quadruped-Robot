@@ -77,13 +77,8 @@ h1 { font-size: clamp(1.35rem, 2vw, 1.85rem); line-height: 1; letter-spacing: -.
 .pose-button:active { transform: scale(.97); }
 .pose-button strong { max-width: 100%; overflow: hidden; text-overflow: ellipsis; font-size: .68rem; white-space: nowrap; }
 .pose-button small { color: var(--muted); font-size: .72rem; }
-.pose-preview { position: relative; width: 100%; height: 62px; display: grid; place-items: center; overflow: hidden; border-radius: 6px; background: radial-gradient(circle, rgba(22, 217, 255, .12), transparent 65%); }
-/* Replace these CSS placeholders with pose-specific photo assets later. */
-.pose-preview::before { content: ""; width: 45px; height: 23px; border: 2px solid #b9c8d8; border-radius: 7px 10px 6px 8px; background: linear-gradient(#e9f0f5 0 45%, #273545 46%); transform: perspective(80px) rotateY(-15deg); box-shadow: 0 8px 13px rgba(0,0,0,.45); }
-.pose-preview::after { content: ""; position: absolute; width: 48px; height: 26px; border-left: 3px solid #d8e2ea; border-right: 3px solid #d8e2ea; transform: skewX(-15deg); bottom: 7px; opacity: .9; }
-.pose-initial { transform: scaleY(.78); transform-origin: bottom; }
-.pose-greeting::after { border-right-width: 0; transform: rotate(-18deg) skewX(-15deg); }
-.pose-tail::after { width: 61px; height: 18px; transform: skewX(-28deg); }
+.pose-preview { position: relative; width: 100%; height: 72px; display: grid; place-items: center; overflow: hidden; border-radius: 6px; background: radial-gradient(circle, rgba(22, 217, 255, .13), transparent 68%); }
+.pose-preview img { width: 100%; height: 100%; display: block; object-fit: contain; filter: drop-shadow(0 7px 7px rgba(0, 0, 0, .52)); }
 
 .camera-panel { display: grid; grid-template-rows: auto minmax(0, 1fr) auto; padding: 12px; }
 .camera-header { min-height: 40px; display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 0 2px 10px; }
@@ -131,7 +126,7 @@ body.focus-mode { overflow: hidden; overscroll-behavior: none; background: #0204
 .focus-mode .poses-section { position: absolute; right: max(20px, env(safe-area-inset-right)); bottom: max(20px, env(safe-area-inset-bottom)); width: min(390px, 42vw); min-height: 0; display: block; border: 0; padding: 0; pointer-events: auto; opacity: .32; transition: opacity .15s; }
 .focus-mode .poses-section:hover, .focus-mode .poses-section:focus-within { opacity: 1; }
 .focus-mode .pose-button { min-height: 92px; border-color: rgba(255,255,255,.22); border-radius: 50px; background: rgba(4,8,13,.72); backdrop-filter: blur(8px); padding: 5px; }
-.focus-mode .pose-preview { height: 48px; }
+.focus-mode .pose-preview { height: 54px; }
 .focus-mode .pose-button small { display: none; }
 
 body.focus-mode.focus-side-rails .movement-section {
@@ -169,6 +164,7 @@ body.focus-mode.focus-side-rails .pose-grid {
   gap: 8px;
 }
 body.focus-mode.focus-side-rails .pose-button { min-height: clamp(92px, 13vh, 122px); }
+body.focus-mode.focus-side-rails .pose-preview { height: clamp(58px, 8vh, 74px); }
 
 @media (min-width: 921px) {
   .app-shell { height: 100vh; }
